@@ -95,7 +95,9 @@ import { Home, Settings, User } from 'lucide-react-native';
 Web is fully supported with Metro bundler:
 - `app/+html.tsx` - Custom HTML template with NativeWind CSS
 - `web.bundler: "metro"` - Uses Metro for web bundling
-- `web.output: "static"` - Static rendering enabled
+- `web.output: "single"` - Single-page app mode (required for NativeWind v4 compatibility)
+
+> **Note:** `"static"` output is not compatible with NativeWind v4's JSX runtime in Node.js static rendering.
 
 ### Template Generated With
 

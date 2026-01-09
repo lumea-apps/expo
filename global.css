@@ -2,8 +2,41 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Hide scrollbar on web while maintaining scroll functionality */
+/* iPhone viewport emulation for web */
 @layer base {
+  :root {
+    /* iPhone 14 Pro dimensions */
+    --device-width: 393px;
+    --device-height: 852px;
+    /* Safe area insets (notch + home indicator) */
+    --safe-area-inset-top: 47px;
+    --safe-area-inset-bottom: 34px;
+  }
+
+  html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    background-color: #000;
+  }
+
+  /* Constrain to iPhone viewport */
+  #root {
+    max-width: var(--device-width);
+    max-height: var(--device-height);
+    width: 100%;
+    height: 100%;
+    margin: 0 auto;
+    overflow: hidden;
+    position: relative;
+    background-color: #fff;
+    /* Safe area padding */
+    padding-top: var(--safe-area-inset-top);
+    padding-bottom: var(--safe-area-inset-bottom);
+    box-sizing: border-box;
+  }
+
+  /* Hide scrollbar on web while maintaining scroll functionality */
   /* Chrome, Safari, Opera */
   ::-webkit-scrollbar {
     display: none;

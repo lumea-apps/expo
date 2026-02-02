@@ -1,25 +1,15 @@
+import '../global.css';
 
-  import '../global.css';
+import { View } from 'react-native';
+import { Slot } from 'expo-router';
 
-
-	import { Stack } from "expo-router";
-
-
-
-export const unstable_settings = {
-	// Ensure that reloading on `/modal` keeps a back button present.
-	initialRouteName: "(tabs)",
-};
+import { NavBar } from '~/components/NavBar';
 
 export default function RootLayout() {
-  
-
   return (
-        
-            <Stack>
-        
-		<Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-		<Stack.Screen name="modal" options={{ presentation: "modal" }} />
-	</Stack>
+    <View className="flex-1 bg-white dark:bg-black">
+      <Slot />
+      <NavBar />
+    </View>
   );
 }

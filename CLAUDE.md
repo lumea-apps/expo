@@ -2,17 +2,6 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## TODO: Rename Package
-
-> **This is the official Lumea Expo template.** After cloning, rename the package in `package.json` from `"lumea-expo-app"` to your project name and remove this section.
->
-> ```bash
-> # Example: rename to "my-awesome-app"
-> # 1. Edit package.json: "name": "my-awesome-app"
-> # 2. Edit app.json: "name", "slug", "scheme"
-> # 3. Delete this TODO section from CLAUDE.md
-> ```
-
 ## Development Commands
 
 ```bash
@@ -32,13 +21,25 @@ bun run web       # Run in web browser
 
 This is an **Expo SDK 54** project using **Expo Router** for file-based routing, **React 19**, and **React Native 0.81** with the New Architecture enabled.
 
-### Routing Structure
+### App: Nouri — conversational AI nutrition assistant
 
-- `app/` - Expo Router file-based routing (similar to Next.js)
-- `app/(tabs)/` - Tab group containing the main tab navigation
-- `app/_layout.tsx` - Root layout (fonts, themes, splash screen)
-- `app/+html.tsx` - Web-only HTML template with NativeWind CSS import
-- `app/modal.tsx` - Modal presented over tabs
+The whole product is a conversation; data screens are secondary. See `README.md` for the product/design overview.
+
+- `app/index.tsx` - Chat home (redirects to `/onboarding` until a profile exists)
+- `app/onboarding.tsx` - Conversational onboarding (name → goal → diet → avoid → weight → activity → targets reveal)
+- `app/today.tsx` - "Oggi" modal: rings, macro bars, water, meal timeline
+- `app/profile.tsx` - Profile, AI engine status, demo/reset actions
+- `app/voice.tsx` - Voice mode (Web Speech API on web, keyboard dictation on native, TTS via `expo-speech`)
+- `app/_layout.tsx` - Root layout (Google fonts, dark theme, splash, stack/modals)
+
+Key modules:
+
+- `lib/ai/` - The "brain". `askNouri()` uses Claude (`claude.ts`, structured outputs → widgets) when `EXPO_PUBLIC_NOURI_API_URL` or `EXPO_PUBLIC_ANTHROPIC_API_KEY` is set, otherwise the offline Italian intent engine (`local.ts`). Both return `{ text, widgets, suggestions, waterMl }`.
+- `lib/types.ts` - `Widget` union = the generative-UI contract. Adding a widget means: type here → schema in `lib/ai/claude.ts` → card in `components/widgets/` → case in `components/widgets/index.tsx`.
+- `lib/store.ts` - Zustand store persisted with AsyncStorage (profile, meals, water, chat).
+- `lib/foods.ts`, `lib/recipes.ts` - Food table + recipe catalogue used by the offline brain.
+- `constants/theme.ts` - Design tokens (colors per macro, fonts, radii). Use these instead of hard-coded values.
+- `components/ui/` - Orb, Aurora background, Glass/Card/Chip/buttons, rings, typography (`Serif`/`Sans`/`Mono`).
 
 Routes are automatically typed via `expo-router` typed routes experiment.
 
@@ -87,7 +88,8 @@ import { Home, Settings, User } from 'lucide-react-native';
   - `experiments.typedRoutes: true` - TypeScript route types
   - `experiments.tsconfigPaths: true` - Metro resolves tsconfig paths
   - `platforms: ["ios", "android", "web"]` - All platforms enabled
-  - `userInterfaceStyle: "automatic"` - System theme follows device
+  - `userInterfaceStyle: "dark"` - The app is dark-only by design
+- **babel.config.js**: `unstable_transformImportMeta: true` is required — zustand's ESM middleware uses `import.meta`, which otherwise breaks the web bundle
 - **metro.config.js**: `maxWorkers` is set to 2 - **DO NOT MODIFY** this value, it's intentionally limited for system stability
 
 ### Web Support

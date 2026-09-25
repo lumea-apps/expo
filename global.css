@@ -17,7 +17,7 @@
     height: 100%;
     margin: 0;
     padding: 0;
-    background-color: #000;
+    background-color: #020203;
   }
 
   /* Constrain to iPhone viewport */
@@ -29,7 +29,7 @@
     margin: 0 auto;
     overflow: hidden;
     position: relative;
-    background-color: #fff;
+    background-color: #08080C;
     /* Safe area padding */
     padding-top: var(--safe-area-inset-top);
     padding-bottom: var(--safe-area-inset-bottom);

@@ -1,5 +1,4 @@
 import { useRouter } from 'expo-router';
-import { ArrowUp, Check } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -12,10 +11,20 @@ import {
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Icon, IconTile, type IconName } from '@/components/ui/Icon';
 import { MacroBar } from '@/components/ui/MacroRing';
 import { Orb, type OrbState } from '@/components/ui/Orb';
 import { Chip, IconButton, PrimaryButton } from '@/components/ui/Surface';
 import { Display, Mono, Sans } from '@/components/ui/Typography';
+import {
+  activityHints,
+  activityIcons,
+  dietHints,
+  dietIcons,
+  goalHints,
+  goalIcons,
+  type IconSpec,
+} from '@/constants/icons';
 import { colors, fonts, radii } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
 import {
@@ -137,7 +146,12 @@ export default function Onboarding() {
                 )}
                 {step === 'goal' && (
                   <ChoiceList
-                    options={Object.entries(goalLabels) as [Goal, string][]}
+                    options={(Object.keys(goalLabels) as Goal[]).map((k) => ({
+                      key: k,
+                      label: goalLabels[k],
+                      hint: goalHints[k],
+                      ...goalIcons[k],
+                    }))}
                     onPick={(v) => {
                       setGoal(v);
                       next();
@@ -146,7 +160,12 @@ export default function Onboarding() {
                 )}
                 {step === 'diet' && (
                   <ChoiceList
-                    options={Object.entries(dietLabels) as [Diet, string][]}
+                    options={(Object.keys(dietLabels) as Diet[]).map((k) => ({
+                      key: k,
+                      label: dietLabels[k],
+                      hint: dietHints[k],
+                      ...dietIcons[k],
+                    }))}
                     onPick={(v) => {
                       setDiet(v);
                       next();
@@ -197,11 +216,12 @@ export default function Onboarding() {
                 )}
                 {step === 'activity' && (
                   <ChoiceList
-                    options={[
-                      ['low', `${activityLabels.low}, per lo più seduto`],
-                      ['medium', `${activityLabels.medium}, 2–3 allenamenti`],
-                      ['high', `${activityLabels.high}, sport quasi ogni giorno`],
-                    ]}
+                    options={(['low', 'medium', 'high'] as Activity[]).map((k) => ({
+                      key: k,
+                      label: activityLabels[k],
+                      hint: activityHints[k],
+                      ...activityIcons[k],
+                    }))}
                     onPick={(v) => {
                       setActivity(v as Activity);
                       next();
@@ -252,10 +272,10 @@ function InputBar({
         </Sans>
       ) : null}
       <IconButton label="Continua" filled size={38} disabled={!value.trim()} onPress={onSubmit}>
-        <ArrowUp
-          size={18}
+        <Icon
+          name="arrow-up-linear"
+          size={20}
           color={value.trim() ? colors.onAccent : colors.faint}
-          strokeWidth={2.4}
         />
       </IconButton>
     </View>
@@ -266,29 +286,39 @@ function ChoiceList<T extends string>({
   options,
   onPick,
 }: {
-  options: [T, string][];
+  options: ({ key: T; label: string; hint: string } & IconSpec)[];
   onPick: (v: T) => void;
 }) {
   const [picked, setPicked] = useState<T | null>(null);
   return (
     <View style={styles.list}>
-      {options.map(([k, label], i) => (
+      {options.map((o, i) => (
         <Pressable
-          key={k}
+          key={o.key}
           onPress={() => {
             haptic.select();
-            setPicked(k);
-            onPick(k);
+            setPicked(o.key);
+            onPick(o.key);
           }}
           style={({ pressed }) => [
             styles.option,
             i > 0 && styles.optionDivider,
-            (pressed || picked === k) && { backgroundColor: colors.bgSubtle },
+            (pressed || picked === o.key) && { backgroundColor: colors.bgSubtle },
           ]}>
-          <Sans size={16} weight="medium">
-            {label}
-          </Sans>
-          {picked === k && <Check size={18} color={colors.ink} strokeWidth={2.2} />}
+          <IconTile name={o.icon as IconName} tint={o.tint} size={38} />
+          <View style={{ flex: 1 }}>
+            <Sans size={16} weight="medium">
+              {o.label}
+            </Sans>
+            <Sans size={13} color={colors.faint}>
+              {o.hint}
+            </Sans>
+          </View>
+          {picked === o.key ? (
+            <Icon name="check-circle-bold" size={22} color={colors.ink} />
+          ) : (
+            <Icon name="alt-arrow-right-linear" size={16} color={colors.faint} />
+          )}
         </Pressable>
       ))}
     </View>
@@ -405,14 +435,15 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   option: {
-    height: 54,
-    paddingHorizontal: 18,
+    minHeight: 64,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: colors.bg,
   },
-  optionDivider: { borderTopWidth: 1, borderColor: colors.border },
+  optionDivider: { borderTopWidth: 1, borderColor: colors.border, marginLeft: 0 },
   bigNumber: { alignItems: 'center', marginTop: 34, gap: 2 },
   macroCard: {
     flexDirection: 'row',

@@ -12,6 +12,8 @@ Chiara, tipografica e silenziosa, a metà tra ElevenLabs e ChatGPT: la conversaz
 | Colore | Inchiostro quasi nero `#0E0E10` per testo e azioni (bottoni a pillola neri). Il colore compare solo nei dati, con una tinta fissa per ogni macro (proteine `#EE8A62`, carboidrati `#8088F2`, grassi `#3FB595`, acqua `#4FA3EE`), e nell'orb |
 | Tipografia | **Geist** in tutta l'app. Titoli in due toni (nero + grigio), numeri con cifre tabulari |
 | Presenza AI | Un **orb pastello** (cielo, lilla, pesca, menta) con ombra morbida. Si muove piano a riposo e accelera quando Nouri ascolta, pensa o parla |
+| Icone | Set **Solar** (480 Design): duotone su riquadri pastello per menu e scelte, lineari per i controlli |
+| Menu | Drawer laterale come ChatGPT, bottom sheet trascinabili per il "+", i pasti e i messaggi, impostazioni modificabili in stile iOS |
 | Motion | Testo che arriva parola per parola, card che entrano in dissolvenza, numeri e anelli che si animano, feedback aptico leggero |
 
 ## Cosa fa
@@ -109,3 +111,4 @@ Per aggiungere un widget:
 
 - Le stime nutrizionali sono indicative e **non sostituiscono un professionista**. Il prompt di sistema chiede a Claude di non incoraggiare restrizioni e di suggerire un professionista se emergono segnali di disturbi alimentari.
 - Per la dettatura nativa dentro l'app, invece della tastiera, serve una development build con `expo-speech-recognition`.
+- Icone: set Solar di 480 Design, licenza CC BY 4.0.

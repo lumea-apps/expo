@@ -1,8 +1,8 @@
-import { Camera, ChartNoAxesColumn, MessageSquareText, Sparkles } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
+import { IconTile } from '@/components/ui/Icon';
 import { Orb } from '@/components/ui/Orb';
 import { Display, Sans } from '@/components/ui/Typography';
 import { colors, radii } from '@/constants/theme';
@@ -52,28 +52,28 @@ export function Greeting({
       <View style={styles.grid}>
         <Starter
           delay={220}
-          icon={<Camera size={18} color={colors.dim} strokeWidth={1.8} />}
+          icon={<IconTile name="camera-bold-duotone" tint="blue" />}
           title="Fotografa il piatto"
           subtitle="Stimo ingredienti e porzioni"
           onPress={onPhoto}
         />
         <Starter
           delay={280}
-          icon={<MessageSquareText size={18} color={colors.dim} strokeWidth={1.8} />}
+          icon={<IconTile name="plate-bold-duotone" tint="peach" />}
           title="Racconta un pasto"
           subtitle="“Due uova e un toast”"
           onPress={() => onSend('Ho mangiato due uova e un toast con avocado')}
         />
         <Starter
           delay={340}
-          icon={<Sparkles size={18} color={colors.dim} strokeWidth={1.8} />}
+          icon={<IconTile name="chef-hat-heart-bold-duotone" tint="amber" />}
           title={`Idee per ${nextMeal}`}
           subtitle="Sui macro che ti restano"
           onPress={() => onSend(`Idee per ${nextMeal}`)}
         />
         <Starter
           delay={400}
-          icon={<ChartNoAxesColumn size={18} color={colors.dim} strokeWidth={1.8} />}
+          icon={<IconTile name="pie-chart-2-bold-duotone" tint="violet" />}
           title="Com’è andata oggi?"
           subtitle="Riepilogo e un consiglio"
           onPress={() => onSend('Com’è andata oggi?')}

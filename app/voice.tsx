@@ -1,6 +1,5 @@
 import * as Speech from 'expo-speech';
 import { useRouter } from 'expo-router';
-import { ArrowUp, Mic, Square, X } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -13,6 +12,7 @@ import {
 import Animated, { FadeIn, FadeInDown, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Icon } from '@/components/ui/Icon';
 import { Orb, type OrbState } from '@/components/ui/Orb';
 import { Chip, IconButton } from '@/components/ui/Surface';
 import { Display, Sans } from '@/components/ui/Typography';
@@ -174,7 +174,11 @@ export default function Voice() {
                   if (typed.trim()) ask(typed.trim());
                   setTyped('');
                 }}>
-                <ArrowUp size={18} color={typed.trim() ? colors.onAccent : colors.faint} />
+                <Icon
+                  name="arrow-up-linear"
+                  size={20}
+                  color={typed.trim() ? colors.onAccent : colors.faint}
+                />
               </IconButton>
             </View>
           )}
@@ -186,7 +190,7 @@ export default function Voice() {
                 router.back();
               }}
               style={({ pressed }) => [styles.round, pressed && { opacity: 0.7 }]}>
-              <X size={22} color={colors.ink} />
+              <Icon name="close-linear" size={24} />
             </Pressable>
             {mic.supported && (
               <Pressable
@@ -200,9 +204,9 @@ export default function Voice() {
                   pressed && { opacity: 0.8 },
                 ]}>
                 {mic.listening || state === 'speaking' ? (
-                  <Square size={20} color={colors.onAccent} fill={colors.onAccent} />
+                  <Icon name="stop-bold" size={24} color={colors.onAccent} />
                 ) : (
-                  <Mic size={24} color={colors.onAccent} />
+                  <Icon name="microphone-3-bold" size={28} color={colors.onAccent} />
                 )}
               </Pressable>
             )}

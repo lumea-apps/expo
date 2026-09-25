@@ -74,3 +74,20 @@ export const shadow = {
   shadowOffset: { width: 0, height: 6 },
   elevation: 3,
 } as const;
+
+/**
+ * Soft tints for icon tiles in menus and settings (pastel ground, saturated glyph),
+ * in the spirit of iOS Settings but calmer.
+ */
+export const tints = {
+  blue: { bg: '#EAF1FF', fg: '#3D78EE' },
+  violet: { bg: '#F0ECFF', fg: '#7456EC' },
+  peach: { bg: '#FFF0E7', fg: '#E3733E' },
+  mint: { bg: '#E7F7F0', fg: '#1F9A72' },
+  amber: { bg: '#FFF5DF', fg: '#C8860F' },
+  rose: { bg: '#FDECEF', fg: '#D5445C' },
+  sky: { bg: '#E5F3FD', fg: '#2A8BD2' },
+  gray: { bg: '#F1F1F3', fg: '#4B4B55' },
+} as const;
+
+export type Tint = keyof typeof tints;

@@ -68,17 +68,22 @@ export default function MyComponent() {
 }
 ```
 
-### Icons with Lucide
+### Icons: Solar
 
-This project uses **Lucide React Native** for icons:
+Icons come from the **Solar** set (480 Design, CC BY 4.0). Only the icons the app uses are
+extracted into `components/ui/solar-icons.ts` by `scripts/build-icons.mjs` (source:
+`@iconify-json/solar`, dev dependency). To add one, put its name in the script and run `bun run icons`.
 
 ```tsx
-import { Home, Settings, User } from 'lucide-react-native';
+import { Icon, IconTile } from '@/components/ui/Icon';
 
-<Home size={24} color="#000" />
-<Settings size={24} color="#666" />
-<User size={24} color="#333" />
+<Icon name="add-linear" size={22} />                 // controls: -linear / -bold
+<IconTile name="scale-bold-duotone" tint="blue" />   // lists and menus: -bold-duotone on a tint
 ```
+
+Domain → icon mapping (goals, diets, activity) lives in `constants/icons.ts`. Menus use
+`components/ui/Menu.tsx` (`MenuGroup`, `MenuRow`, `ActionTiles`) and `components/ui/Sheet.tsx`
+(`SheetProvider` + `useSheet().open(...)`, rendered inside the screen so it also works above native modals).
 
 ### Key Configuration
 

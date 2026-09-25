@@ -1,10 +1,12 @@
 import { useRouter } from 'expo-router';
-import { Trash2, X } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Icon } from '@/components/ui/Icon';
 import { MacroBar, Rings } from '@/components/ui/MacroRing';
+import { MenuGroup, MenuRow } from '@/components/ui/Menu';
+import { SheetProvider, useSheet } from '@/components/ui/Sheet';
 import { Card, IconButton, PrimaryButton } from '@/components/ui/Surface';
 import { Display, Mono, Sans } from '@/components/ui/Typography';
 import { InsightCard, WaterCard } from '@/components/widgets/DataCards';
@@ -12,6 +14,7 @@ import { colors, radii } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
 import { dayTotals, formatKcal, formatTime, mealsOn, mealTotals } from '@/lib/nutrition';
 import { useNouri } from '@/lib/store';
+import type { Meal } from '@/lib/types';
 import { useAnimatedNumber } from '@/lib/useAnimatedNumber';
 import { useSend } from '@/lib/useSend';
 
@@ -21,17 +24,77 @@ function longDate(d = new Date()): string {
 }
 
 export default function Today() {
+  return (
+    <SheetProvider>
+      <TodayContent />
+    </SheetProvider>
+  );
+}
+
+function TodayContent() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const meals = useNouri((s) => s.meals);
   const profile = useNouri((s) => s.profile);
   const removeMeal = useNouri((s) => s.removeMeal);
   const send = useSend();
+  const sheet = useSheet();
+  const logMeal = useNouri((s) => s.logMeal);
 
   const T = profile?.targets ?? { kcal: 2000, protein: 120, carbs: 230, fat: 65, water: 2000 };
   const t = dayTotals(meals);
   const list = mealsOn(meals);
   const eaten = useAnimatedNumber(t.kcal, 1200, 200);
+
+  const openMeal = (m: Meal) => {
+    const mt = mealTotals(m);
+    sheet.open({
+      title: m.title,
+      subtitle: `${m.label} · ${formatTime(m.at)} · ${formatKcal(mt.kcal)} kcal`,
+      render: (close) => (
+        <MenuGroup>
+          <MenuRow
+            icon="magic-stick-3-bold-duotone"
+            tint="violet"
+            label="Un’alternativa più leggera"
+            hint="Chiedilo a Nouri"
+            onPress={() =>
+              close(() => {
+                router.back();
+                setTimeout(() => send({ text: `Alternativa a ${m.title.toLowerCase()}` }), 350);
+              })
+            }
+          />
+          <MenuRow
+            icon="refresh-bold-duotone"
+            tint="mint"
+            label="Registralo di nuovo adesso"
+            hint="Stesso pasto, stesse porzioni"
+            onPress={() =>
+              close(() => {
+                logMeal(
+                  { title: m.title, emoji: m.emoji, label: m.label, items: m.items },
+                  m.source
+                );
+                haptic.success();
+              })
+            }
+          />
+          <MenuRow
+            icon="trash-bin-trash-bold-duotone"
+            label="Elimina dal diario"
+            danger
+            onPress={() =>
+              close(() => {
+                removeMeal(m.id);
+                haptic.tap();
+              })
+            }
+          />
+        </MenuGroup>
+      ),
+    });
+  };
 
   const note = (() => {
     if (!list.length)
@@ -77,7 +140,7 @@ export default function Today() {
             </Sans>
           </View>
           <IconButton label="Chiudi" onPress={() => router.back()} style={styles.close}>
-            <X size={18} color={colors.ink} />
+            <Icon name="close-linear" size={20} />
           </IconButton>
         </View>
 
@@ -144,35 +207,33 @@ export default function Today() {
             {list.map((m, i) => {
               const mt = mealTotals(m);
               return (
-                <Animated.View
-                  key={m.id}
-                  layout={LinearTransition}
-                  style={[styles.meal, i > 0 && styles.divider]}>
-                  <Mono size={12} style={{ width: 40 }}>
-                    {formatTime(m.at)}
-                  </Mono>
-                  <View style={styles.tile}>
-                    <Sans size={17}>{m.emoji}</Sans>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Sans size={14} weight="medium" numberOfLines={1}>
-                      {m.title}
-                    </Sans>
-                    <Sans size={12} color={colors.faint}>
-                      {m.label} · P {mt.protein} · C {mt.carbs} · G {mt.fat}
-                    </Sans>
-                  </View>
-                  <Mono size={13} color={colors.ink}>
-                    {formatKcal(mt.kcal)}
-                  </Mono>
+                <Animated.View key={m.id} layout={LinearTransition}>
                   <Pressable
-                    accessibilityLabel="Elimina pasto"
-                    hitSlop={10}
-                    onPress={() => {
-                      haptic.tap();
-                      removeMeal(m.id);
-                    }}>
-                    <Trash2 size={15} color={colors.faint} />
+                    accessibilityLabel={`Opzioni per ${m.title}`}
+                    onPress={() => openMeal(m)}
+                    style={({ pressed }) => [
+                      styles.meal,
+                      i > 0 && styles.divider,
+                      pressed && { backgroundColor: colors.bgSubtle },
+                    ]}>
+                    <Mono size={12} style={{ width: 40 }}>
+                      {formatTime(m.at)}
+                    </Mono>
+                    <View style={styles.tile}>
+                      <Sans size={17}>{m.emoji}</Sans>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Sans size={14} weight="medium" numberOfLines={1}>
+                        {m.title}
+                      </Sans>
+                      <Sans size={12} color={colors.faint}>
+                        {m.label} · P {mt.protein} · C {mt.carbs} · G {mt.fat}
+                      </Sans>
+                    </View>
+                    <Mono size={13} color={colors.ink}>
+                      {formatKcal(mt.kcal)}
+                    </Mono>
+                    <Icon name="menu-dots-bold" size={18} color={colors.faint} />
                   </Pressable>
                 </Animated.View>
               );

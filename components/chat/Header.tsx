@@ -3,16 +3,18 @@ import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Icon } from '@/components/ui/Icon';
 import { Rings } from '@/components/ui/MacroRing';
 import { Orb } from '@/components/ui/Orb';
+import { IconButton } from '@/components/ui/Surface';
 import { Mono, Sans } from '@/components/ui/Typography';
 import { colors, radii } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
 import { dayTotals, formatKcal } from '@/lib/nutrition';
 import { useNouri } from '@/lib/store';
 
-/** Top bar: wordmark, today's calories (opens "Oggi") and the profile avatar. */
-export function ChatHeader() {
+/** Top bar: menu, wordmark and today's calories (opens "Oggi"). */
+export function ChatHeader({ onMenu }: { onMenu: () => void }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const thinking = useNouri((s) => s.thinking);
@@ -30,8 +32,11 @@ export function ChatHeader() {
         style={StyleSheet.absoluteFill}
       />
       <View style={styles.row}>
+        <IconButton label="Apri il menu" onPress={onMenu} size={40}>
+          <Icon name="hamburger-menu-linear" size={24} />
+        </IconButton>
         <View style={styles.brand}>
-          <Orb size={22} shadow={false} state={thinking ? 'thinking' : 'idle'} />
+          <Orb size={20} shadow={false} state={thinking ? 'thinking' : 'idle'} />
           <Sans size={18} weight="semi" style={{ letterSpacing: -0.4 }}>
             Nouri
           </Sans>
@@ -57,18 +62,6 @@ export function ChatHeader() {
           </Mono>
           <Mono size={12}>/ {T ? formatKcal(T.kcal) : '—'}</Mono>
         </Pressable>
-
-        <Pressable
-          accessibilityLabel="Profilo"
-          onPress={() => {
-            haptic.tap();
-            router.push('/profile');
-          }}
-          style={({ pressed }) => [styles.avatar, pressed && { opacity: 0.7 }]}>
-          <Sans size={14} weight="semi">
-            {(profile?.name ?? 'N').charAt(0).toUpperCase()}
-          </Sans>
-        </Pressable>
       </View>
     </View>
   );
@@ -80,11 +73,11 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: 16,
+    paddingHorizontal: 10,
     paddingBottom: 20,
     zIndex: 10,
   },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   brand: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
   pulse: {
     flexDirection: 'row',
@@ -97,13 +90,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgSubtle,
     borderWidth: 1,
     borderColor: colors.border,
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgMuted,
   },
 });

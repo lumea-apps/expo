@@ -1,8 +1,8 @@
-import { ArrowRight, Check, ChevronDown } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInRight } from 'react-native-reanimated';
 
+import { Icon } from '@/components/ui/Icon';
 import { Card, PrimaryButton } from '@/components/ui/Surface';
 import { Display, Mono, Sans } from '@/components/ui/Typography';
 import { colors, radii } from '@/constants/theme';
@@ -92,8 +92,9 @@ export function RecipeCard({ recipe, widgetKey }: { recipe: Recipe; widgetKey: s
         <Sans size={14} weight="medium">
           Procedimento
         </Sans>
-        <ChevronDown
-          size={16}
+        <Icon
+          name="alt-arrow-down-linear"
+          size={18}
           color={colors.dim}
           style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }}
         />
@@ -118,7 +119,7 @@ export function RecipeCard({ recipe, widgetKey }: { recipe: Recipe; widgetKey: s
       <View style={styles.footer}>
         {logged ? (
           <View style={styles.done}>
-            <Check size={16} color={colors.positive} strokeWidth={2.4} />
+            <Icon name="check-circle-bold" size={18} color={colors.positive} />
             <Sans size={14} weight="medium" color={colors.positive}>
               Aggiunta al diario di oggi
             </Sans>
@@ -222,7 +223,7 @@ export function SwapCard({ from, to, reason }: { from: SwapFood; to: SwapFood; r
           </Sans>
           <Mono size={12}>{formatKcal(from.kcal)} kcal</Mono>
         </View>
-        <ArrowRight size={16} color={colors.faint} />
+        <Icon name="alt-arrow-right-linear" size={18} color={colors.faint} />
         <View style={styles.swapSide}>
           <EmojiTile emoji={to.emoji} size={34} />
           <Sans size={13} weight="semi" numberOfLines={2}>
@@ -296,7 +297,7 @@ export function GroceryCard({
                     styles.checkbox,
                     on && { backgroundColor: colors.ink, borderColor: colors.ink },
                   ]}>
-                  {on && <Check size={12} color={colors.onAccent} strokeWidth={3} />}
+                  {on && <Icon name="check-linear" size={13} color={colors.onAccent} />}
                 </View>
                 <Sans
                   size={14}

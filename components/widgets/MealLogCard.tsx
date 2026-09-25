@@ -1,8 +1,8 @@
-import { Check } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
+import { Icon } from '@/components/ui/Icon';
 import { Card, PrimaryButton } from '@/components/ui/Surface';
 import { Mono, Sans } from '@/components/ui/Typography';
 import { colors, radii } from '@/constants/theme';
@@ -128,7 +128,7 @@ export function MealLogCard({
       <View style={styles.footer}>
         {locked ? (
           <Animated.View entering={FadeIn} style={styles.logged}>
-            <Check size={16} color={colors.positive} strokeWidth={2.4} />
+            <Icon name="check-circle-bold" size={18} color={colors.positive} />
             <Sans size={14} weight="medium" color={colors.positive}>
               Nel diario{loggedMeal ? ` alle ${formatTime(loggedMeal.at)}` : ''}
             </Sans>

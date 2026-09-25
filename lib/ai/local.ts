@@ -54,7 +54,15 @@ function route(input: UserInput, ctx: BrainContext): Turn {
     /(ricett|come (si )?(fa|prepar|cucin)|procedimento)/.test(t) ||
     (findRecipe(input.text) && !foods.length)
   ) {
-    return recipeTurn(findRecipe(input.text) ?? pickRecipes(ctx, momentFrom(t))[0], ctx);
+    return recipeTurn(
+      findRecipe(input.text) ??
+        pickRecipes(ctx, momentFrom(t), {
+          protein: /protein/.test(t),
+          quick: /(veloce|rapid|pochi minuti)/.test(t),
+          light: /(legger|light)/.test(t),
+        })[0],
+      ctx
+    );
   }
   if (/(spesa|lista|supermercato)/.test(t)) return groceryTurn(ctx);
   if (/(invece d|alternativ|sostitu|al posto d|swap|piu leggero di)/.test(t))
@@ -145,7 +153,7 @@ function allowed(r: RecipeEntry, p: Profile): boolean {
 function pickRecipes(
   ctx: BrainContext,
   moment: MealLabel,
-  opts: { light?: boolean; protein?: boolean } = {}
+  opts: { light?: boolean; protein?: boolean; quick?: boolean } = {}
 ): RecipeEntry[] {
   const left = remaining(ctx);
   const allowedPool = RECIPES.filter((r) => allowed(r, ctx.profile));
@@ -158,6 +166,7 @@ function pickRecipes(
       score -= Math.abs(r.kcal - Math.min(budget, 650)) / 200;
       if (left.protein > 30 || opts.protein) score += r.protein / 18;
       if (opts.light) score -= r.kcal / 180;
+      if (opts.quick) score -= r.minutes / 6;
       return { r, score };
     })
     .sort((a, b) => b.score - a.score);
@@ -221,13 +230,13 @@ function logTurn(foods: FoodItem[], t: string, ctx: BrainContext, waterMl: numbe
   const afterKcal = left.kcal - tot.kcal;
 
   let comment = '';
-  if (tot.protein >= 25) comment = 'Bel colpo di proteine';
+  if (tot.protein >= 25) comment = 'Bel colpo di proteine.';
   else if (tot.kcal > 750)
     comment = 'Pasto importante: ci bilanciamo più tardi con qualcosa di leggero.';
   else if (tot.protein < 10 && tot.kcal > 250)
     comment = 'Poche proteine qui — le recuperiamo al prossimo pasto.';
   else if (tot.kcal <= 350) comment = 'Leggero e pulito.';
-  else comment = 'Ricevuto';
+  else comment = 'Segnato.';
 
   const widgets: Widget[] = [{ type: 'meal_log', meal: { ...meal, items: [...foods] } }];
   if (afterKcal < 0) {

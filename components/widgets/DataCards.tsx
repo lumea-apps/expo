@@ -1,6 +1,6 @@
-import { ArrowRight, Minus, Plus } from 'lucide-react-native';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { Icon } from '@/components/ui/Icon';
 import { MacroBar, Rings } from '@/components/ui/MacroRing';
 import { Card } from '@/components/ui/Surface';
 import { Mono, Sans } from '@/components/ui/Typography';
@@ -159,7 +159,7 @@ export function WaterCard() {
             styles.waterMinus,
             pressed && { backgroundColor: colors.bgSubtle },
           ]}>
-          <Minus size={16} color={colors.dim} />
+          <Icon name="minus-linear" size={18} color={colors.dim} />
         </Pressable>
         <Pressable
           onPress={() => {
@@ -171,7 +171,7 @@ export function WaterCard() {
             styles.waterPlus,
             pressed && { backgroundColor: colors.bgSubtle },
           ]}>
-          <Plus size={16} color={colors.ink} />
+          <Icon name="waterdrop-bold-duotone" size={18} color={colors.water} />
           <Sans size={14} weight="medium">
             Un bicchiere, 250 ml
           </Sans>
@@ -292,7 +292,7 @@ export function TargetsCard({
                 <Mono size={13} style={{ textDecorationLine: 'line-through' }}>
                   {formatKcal(r.b)}
                 </Mono>
-                <ArrowRight size={12} color={colors.faint} />
+                <Icon name="alt-arrow-right-linear" size={13} color={colors.faint} />
               </>
             )}
             <Mono size={14} weight="medium" color={colors.ink}>

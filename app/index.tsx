@@ -1,5 +1,5 @@
 import { Redirect } from 'expo-router';
-import { Fragment, useCallback, useEffect, useRef } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -9,7 +9,9 @@ import { DayDivider } from '@/components/chat/DayDivider';
 import { Greeting } from '@/components/chat/Greeting';
 import { ChatHeader } from '@/components/chat/Header';
 import { MessageView } from '@/components/chat/MessageView';
+import { SideMenu } from '@/components/chat/SideMenu';
 import { Thinking } from '@/components/chat/Thinking';
+import { SheetProvider } from '@/components/ui/Sheet';
 import { colors } from '@/constants/theme';
 import type { UserInput } from '@/lib/ai';
 import { dailyBrief } from '@/lib/ai/local';
@@ -25,6 +27,9 @@ export default function ChatScreen() {
   const messages = useNouri((s) => s.messages);
   const thinking = useNouri((s) => s.thinking);
   const send = useSend();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
+  const newChat = useCallback(() => useNouri.getState().clearChat(), []);
 
   const scroll = useRef<ScrollView>(null);
   // Follow the conversation unless the user scrolled up to read. Scroll events
@@ -91,59 +96,66 @@ export default function ChatScreen() {
   const lastUser = [...messages].reverse().find((m) => m.role === 'user');
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView
-          ref={scroll}
+    <SheetProvider>
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <KeyboardAvoidingView
           style={{ flex: 1 }}
-          contentContainerStyle={{
-            flexGrow: 1,
-            paddingTop: insets.top + 68,
-            paddingBottom: insets.bottom + (suggestions.length ? 140 : 96),
-            paddingHorizontal: 20,
-            gap: 22,
-          }}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="interactive"
-          scrollEventThrottle={32}
-          onScroll={(e) => {
-            if (Date.now() - autoScrollAt.current < 700) return;
-            const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-            stick.current = contentSize.height - contentOffset.y - layoutMeasurement.height < 160;
-          }}
-          onContentSizeChange={() => {
-            if (stick.current && messages.length) toEnd();
-          }}>
-          {messages.length === 0 && !thinking && <Greeting onSend={sendText} onPhoto={sendPhoto} />}
-          {messages.map((m, i) => (
-            <Fragment key={m.id}>
-              {(i === 0 || dayKey(m.at) !== dayKey(messages[i - 1].at)) && <DayDivider at={m.at} />}
-              <MessageView
-                message={m}
-                afterPhoto={m.role === 'assistant' && Boolean(messages[i - 1]?.imageUri)}
-                onSend={sendText}
-              />
-            </Fragment>
-          ))}
-          {thinking && <Thinking photo={Boolean(lastUser?.imageUri)} />}
-        </ScrollView>
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView
+            ref={scroll}
+            style={{ flex: 1 }}
+            contentContainerStyle={{
+              flexGrow: 1,
+              paddingTop: insets.top + 68,
+              paddingBottom: insets.bottom + (suggestions.length ? 140 : 96),
+              paddingHorizontal: 20,
+              gap: 22,
+            }}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            scrollEventThrottle={32}
+            onScroll={(e) => {
+              if (Date.now() - autoScrollAt.current < 700) return;
+              const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+              stick.current = contentSize.height - contentOffset.y - layoutMeasurement.height < 160;
+            }}
+            onContentSizeChange={() => {
+              if (stick.current && messages.length) toEnd();
+            }}>
+            {messages.length === 0 && !thinking && (
+              <Greeting onSend={sendText} onPhoto={sendPhoto} />
+            )}
+            {messages.map((m, i) => (
+              <Fragment key={m.id}>
+                {(i === 0 || dayKey(m.at) !== dayKey(messages[i - 1].at)) && (
+                  <DayDivider at={m.at} />
+                )}
+                <MessageView
+                  message={m}
+                  afterPhoto={m.role === 'assistant' && Boolean(messages[i - 1]?.imageUri)}
+                  onSend={sendText}
+                />
+              </Fragment>
+            ))}
+            {thinking && <Thinking photo={Boolean(lastUser?.imageUri)} />}
+          </ScrollView>
 
-        <View
-          pointerEvents="box-none"
-          style={[styles.bottom, { paddingBottom: insets.bottom + 10 }]}>
-          <LinearGradient
-            pointerEvents="none"
-            colors={['rgba(255,255,255,0)', colors.bg, colors.bg]}
-            locations={[0, 0.35, 1]}
-            style={StyleSheet.absoluteFill}
-          />
-          <Composer suggestions={suggestions} disabled={thinking} onSend={sendInput} />
-        </View>
-      </KeyboardAvoidingView>
-      <ChatHeader />
-    </View>
+          <View
+            pointerEvents="box-none"
+            style={[styles.bottom, { paddingBottom: insets.bottom + 10 }]}>
+            <LinearGradient
+              pointerEvents="none"
+              colors={['rgba(255,255,255,0)', colors.bg, colors.bg]}
+              locations={[0, 0.35, 1]}
+              style={StyleSheet.absoluteFill}
+            />
+            <Composer suggestions={suggestions} disabled={thinking} onSend={sendInput} />
+          </View>
+        </KeyboardAvoidingView>
+        <ChatHeader onMenu={() => setMenuOpen(true)} />
+        <SideMenu visible={menuOpen} onClose={closeMenu} onSend={sendText} onNewChat={newChat} />
+      </View>
+    </SheetProvider>
   );
 }
 

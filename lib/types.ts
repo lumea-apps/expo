@@ -177,6 +177,75 @@ export interface MealPlan {
   days: PlanDay[];
 }
 
+// ——— training (optional module) ———
+
+export type TrainingGoal = 'strength' | 'muscle' | 'fat_loss' | 'fitness';
+
+export interface TrainingSetup {
+  goal: TrainingGoal;
+  level: 1 | 2 | 3;
+  /** Sessions per week, 2–6. */
+  days: number;
+  equipment: 'none' | 'home' | 'gym';
+  /** Minutes per session. */
+  minutes: 20 | 30 | 45 | 60;
+}
+
+export interface WorkoutExercise {
+  /** Catalogue id, or empty for exercises Claude named that the catalogue doesn't have. */
+  id: string;
+  name: string;
+  sets: number;
+  /** "8–12", "30 s", "10 min". */
+  reps: string;
+  /** Rest between sets, seconds. */
+  rest: number;
+  note?: string;
+}
+
+export interface WorkoutSession {
+  id: string; // "A", "B", …
+  name: string;
+  /** Muscles worked, for the card ("Gambe, petto, schiena"). */
+  focus: string;
+  /** Day of the week, 0 = Sunday … 6 = Saturday. */
+  weekday: number;
+  minutes: number;
+  exercises: WorkoutExercise[];
+}
+
+/** A weekly routine ("scheda"): the same sessions every week. */
+export interface WorkoutPlan {
+  id: string;
+  createdAt: string;
+  setup: TrainingSetup;
+  sessions: WorkoutSession[];
+}
+
+export interface WorkoutLog {
+  id: string;
+  date: string; // day key
+  planId: string;
+  sessionId: string;
+  name: string;
+  minutes: number;
+  kcal: number;
+}
+
+/** An exercise explained, as shown in chat. */
+export interface ExerciseCard {
+  id: string;
+  name: string;
+  muscles: string[];
+  equipment: string[];
+  level?: number;
+  steps: string[];
+  tips: string[];
+  mistakes: string[];
+  /** "3 × 10–12" suggestion. */
+  dose?: string;
+}
+
 /**
  * Generative UI blocks the assistant can place in the conversation.
  * Both the local demo brain and Claude produce exactly these shapes.
@@ -200,7 +269,10 @@ export type Widget =
   | { type: 'targets'; before: Targets; after: Targets; changes: string[] }
   | { type: 'meal_plan'; plan: MealPlan }
   | { type: 'food_facts'; food: FoodFacts }
-  | { type: 'memory'; changes: MemoryChange[]; recall?: boolean };
+  | { type: 'memory'; changes: MemoryChange[]; recall?: boolean }
+  | { type: 'workout_plan'; plan: WorkoutPlan; sessionId?: string }
+  | { type: 'exercise'; exercise: ExerciseCard }
+  | { type: 'exercises'; title: string; items: { id: string; name: string; muscles: string[] }[] };
 
 /** A change to the user's plan requested in conversation ("voglio mettere massa"). */
 export interface ProfilePatch {
@@ -226,6 +298,17 @@ export interface MemoryOps {
   add?: { kind: MemoryKind; text: string }[];
   forget?: string[];
   shortcut?: { name: string; meal: MealDraft };
+}
+
+/** One conversation in the side menu. */
+export interface Thread {
+  id: string;
+  title: string;
+  /** false once the user renamed it: automatic titles stop there. */
+  autoTitle: boolean;
+  createdAt: string;
+  updatedAt: string;
+  messages: ChatMessage[];
 }
 
 export interface ChatMessage {

@@ -18,6 +18,10 @@ import type {
   PlanPrefs,
   Profile,
   Shortcut,
+  Thread,
+  TrainingSetup,
+  WorkoutLog,
+  WorkoutPlan,
 } from './types';
 
 interface NouriState {
@@ -27,7 +31,11 @@ interface NouriState {
   onboardingDraft: OnboardingDraft | null;
   meals: Meal[];
   water: Record<string, number>;
+  /** Messages of the active conversation (a working copy of `threads[active].messages`). */
   messages: ChatMessage[];
+  /** Every conversation, newest activity first in the side menu. */
+  threads: Thread[];
+  threadId: string | null;
   /** `${messageId}:${widgetIndex}` → logged meal id, so a card knows it was saved. */
   logged: Record<string, string>;
   checked: Record<string, boolean>;
@@ -48,6 +56,11 @@ interface NouriState {
   planLog: Record<string, string>;
   /** Last foods picked in quick search, newest first. */
   recentFoods: FoodFacts[];
+  /** Training is an optional module: off until the user sets it up. */
+  training: { enabled: boolean; setup: TrainingSetup | null };
+  workoutPlan: WorkoutPlan | null;
+  pastWorkoutPlans: WorkoutPlan[];
+  workoutLog: WorkoutLog[];
 
   // ephemeral (not persisted)
   hydrated: boolean;
@@ -85,9 +98,37 @@ interface NouriState {
   setPlanPrefs: (p: Partial<PlanPrefs>) => void;
   markPlanMeal: (key: string, mealId: string) => void;
   pushRecentFood: (f: FoodFacts) => void;
+  setTraining: (patch: Partial<{ enabled: boolean; setup: TrainingSetup | null }>) => void;
+  /** Makes a routine active (the previous one is kept in `pastWorkoutPlans`) and turns the module on. */
+  activateWorkoutPlan: (plan: WorkoutPlan) => void;
+  /** Edits of the same routine (a swapped exercise). */
+  setWorkoutPlan: (plan: WorkoutPlan | null) => void;
+  logWorkout: (log: Omit<WorkoutLog, 'id'>) => WorkoutLog;
+  removeWorkoutLog: (id: string) => void;
+  /** Starts an empty conversation; the current one stays in the side menu. */
+  newThread: () => void;
+  openThread: (id: string) => void;
+  renameThread: (id: string, title: string) => void;
+  deleteThread: (id: string) => void;
+  /** Deletes every conversation (diary, memory and plans stay). */
   clearChat: () => void;
   seedDemoWeek: () => void;
   resetAll: () => void;
+}
+
+const DAY_TITLE = new Intl.DateTimeFormat('it-IT', { day: 'numeric', month: 'short' });
+
+/** A conversation's title: its first question, or what opened it. */
+function autoTitle(messages: ChatMessage[]): string {
+  const first = messages.find((m) => m.role === 'user');
+  if (first) {
+    const t = first.text.trim().replace(/\s+/g, ' ');
+    if (!t) return first.imageUri ? 'Foto di un piatto' : 'Nuova conversazione';
+    return t.length > 44 ? `${t.slice(0, 42).trimEnd()}…` : t.charAt(0).toUpperCase() + t.slice(1);
+  }
+  return messages.length
+    ? `Buongiorno · ${DAY_TITLE.format(new Date(messages[0].at))}`
+    : 'Nuova conversazione';
 }
 
 export const useNouri = create<NouriState>()(
@@ -98,6 +139,8 @@ export const useNouri = create<NouriState>()(
       meals: [],
       water: {},
       messages: [],
+      threads: [],
+      threadId: null,
       logged: {},
       checked: {},
       speakReplies: false,
@@ -110,6 +153,10 @@ export const useNouri = create<NouriState>()(
       planPrefs: { kind: 'week', focus: 'balanced' },
       planLog: {},
       recentFoods: [],
+      training: { enabled: false, setup: null },
+      workoutPlan: null,
+      pastWorkoutPlans: [],
+      workoutLog: [],
       hydrated: false,
       thinking: false,
       fresh: {},
@@ -156,12 +203,58 @@ export const useNouri = create<NouriState>()(
 
       pushMessage: (m, animate = false) => {
         const msg: ChatMessage = { ...m, id: uid(), at: new Date().toISOString() };
-        set((s) => ({
-          messages: [...s.messages, msg],
-          fresh: animate ? { ...s.fresh, [msg.id]: true } : s.fresh,
-        }));
+        set((s) => {
+          const messages = [...s.messages, msg];
+          const id = s.threadId ?? uid();
+          const existing = s.threads.find((t) => t.id === id);
+          const thread: Thread = existing
+            ? { ...existing, messages, updatedAt: msg.at }
+            : {
+                id,
+                title: autoTitle(messages),
+                autoTitle: true,
+                createdAt: msg.at,
+                updatedAt: msg.at,
+                messages,
+              };
+          if (
+            thread.autoTitle &&
+            msg.role === 'user' &&
+            !thread.messages.slice(0, -1).some((x) => x.role === 'user')
+          )
+            thread.title = autoTitle(messages);
+          return {
+            messages,
+            threadId: id,
+            threads: [thread, ...s.threads.filter((t) => t.id !== id)],
+            fresh: animate ? { ...s.fresh, [msg.id]: true } : s.fresh,
+          };
+        });
         return msg;
       },
+
+      newThread: () => set({ messages: [], threadId: null, fresh: {} }),
+
+      openThread: (id) =>
+        set((s) => {
+          const t = s.threads.find((x) => x.id === id);
+          return t ? { messages: t.messages, threadId: id, fresh: {} } : s;
+        }),
+
+      renameThread: (id, title) =>
+        set((s) => ({
+          threads: s.threads.map((t) =>
+            t.id === id
+              ? { ...t, title: title.trim().slice(0, 60) || t.title, autoTitle: false }
+              : t
+          ),
+        })),
+
+      deleteThread: (id) =>
+        set((s) => ({
+          threads: s.threads.filter((t) => t.id !== id),
+          ...(s.threadId === id ? { messages: [], threadId: null, fresh: {} } : null),
+        })),
 
       settle: (id) =>
         set((s) => {
@@ -310,12 +403,47 @@ export const useNouri = create<NouriState>()(
 
       markPlanMeal: (key, mealId) => set((s) => ({ planLog: { ...s.planLog, [key]: mealId } })),
 
+      setTraining: (patch) => set((s) => ({ training: { ...s.training, ...patch } })),
+
+      activateWorkoutPlan: (plan) =>
+        set((s) => ({
+          workoutPlan: plan,
+          training: { enabled: true, setup: plan.setup },
+          pastWorkoutPlans:
+            s.workoutPlan && s.workoutPlan.id !== plan.id
+              ? [
+                  s.workoutPlan,
+                  ...s.pastWorkoutPlans.filter((p) => p.id !== s.workoutPlan!.id),
+                ].slice(0, 6)
+              : s.pastWorkoutPlans,
+        })),
+
+      setWorkoutPlan: (workoutPlan) => set({ workoutPlan }),
+
+      logWorkout: (log) => {
+        const entry: WorkoutLog = { ...log, id: uid() };
+        set((s) => ({
+          workoutLog: [
+            entry,
+            // one log per session per day
+            ...s.workoutLog.filter(
+              (l) =>
+                !(l.date === log.date && l.sessionId === log.sessionId && l.planId === log.planId)
+            ),
+          ].slice(0, 200),
+        }));
+        return entry;
+      },
+
+      removeWorkoutLog: (id) =>
+        set((s) => ({ workoutLog: s.workoutLog.filter((l) => l.id !== id) })),
+
       pushRecentFood: (f) =>
         set((s) => ({
           recentFoods: [f, ...s.recentFoods.filter((x) => x.id !== f.id)].slice(0, 8),
         })),
 
-      clearChat: () => set({ messages: [], logged: {}, checked: {}, fresh: {} }),
+      clearChat: () => set({ messages: [], threads: [], threadId: null, fresh: {} }),
 
       seedDemoWeek: () => {
         const { profile } = get();
@@ -374,12 +502,18 @@ export const useNouri = create<NouriState>()(
           planPrefs: { kind: 'week', focus: 'balanced' },
           planLog: {},
           recentFoods: [],
+          training: { enabled: false, setup: null },
+          workoutPlan: null,
+          pastWorkoutPlans: [],
+          workoutLog: [],
           lastBrief: null,
           profile: null,
           onboardingDraft: null,
           meals: [],
           water: {},
           messages: [],
+          threads: [],
+          threadId: null,
           logged: {},
           checked: {},
           fresh: {},
@@ -405,17 +539,47 @@ export const useNouri = create<NouriState>()(
         planPrefs: s.planPrefs,
         planLog: s.planLog,
         recentFoods: s.recentFoods,
-        // keep the chat light: large inline data-URIs (web photos) are dropped
-        messages: s.messages
-          .slice(-80)
-          .map((m) =>
-            m.imageUri && m.imageUri.startsWith('data:') && m.imageUri.length > 150_000
-              ? { ...m, imageUri: undefined }
-              : m
-          ),
+        training: s.training,
+        workoutPlan: s.workoutPlan,
+        pastWorkoutPlans: s.pastWorkoutPlans,
+        workoutLog: s.workoutLog,
+        threadId: s.threadId,
+        // keep the chats light: the newest 40, 80 messages each, no large inline photos (web)
+        threads: s.threads.slice(0, 40).map((t) => ({
+          ...t,
+          messages: t.messages
+            .slice(-80)
+            .map((m) =>
+              m.imageUri && m.imageUri.startsWith('data:') && m.imageUri.length > 150_000
+                ? { ...m, imageUri: undefined }
+                : m
+            ),
+        })),
       }),
-      onRehydrateStorage: () => () => {
-        useNouri.setState({ hydrated: true });
+      onRehydrateStorage: () => (state) => {
+        // the active conversation's messages come from its thread; older saves had a single chat
+        const legacy = (state as { messages?: ChatMessage[] } | undefined)?.messages ?? [];
+        let threads = state?.threads ?? [];
+        let threadId = state?.threadId ?? null;
+        if (!threads.length && legacy.length) {
+          const t: Thread = {
+            id: uid(),
+            title: autoTitle(legacy),
+            autoTitle: true,
+            createdAt: legacy[0].at,
+            updatedAt: legacy[legacy.length - 1].at,
+            messages: legacy,
+          };
+          threads = [t];
+          threadId = t.id;
+        }
+        const active = threads.find((t) => t.id === threadId);
+        useNouri.setState({
+          threads,
+          threadId: active ? threadId : null,
+          messages: active?.messages ?? [],
+          hydrated: true,
+        });
       },
     }
   )

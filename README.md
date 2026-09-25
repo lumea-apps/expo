@@ -33,17 +33,27 @@ Chiara, tipografica e silenziosa, a metà tra ElevenLabs e ChatGPT: la conversaz
   - `meal_plan`: piano pasti di un giorno o di una settimana, con i giorni da scegliere.
   - `food_facts`: valori nutrizionali di un alimento o prodotto, con la tabella per 100 g.
   - `memory`: conferma di cosa Nouri ha memorizzato o dimenticato.
-- **Memoria**: Nouri ricorda i cibi che ami (*"adoro il salmone"*), quelli che non ti piacciono (*"odio i funghi"*) e le abitudini (*"ricordati che a pranzo mangio in mensa"*). Li usa in idee, ricette e piani pasti. Si gestisce, e si spegne, da **Memoria** nel menu laterale.
+  - `workout_plan`: la scheda di allenamento, con le sedute da scegliere e *Segna fatto* per quella di oggi.
+  - `exercise`: come si esegue un esercizio (muscoli, passaggi, un consiglio, un errore da evitare).
+  - `exercises`: esercizi per un muscolo, da toccare per la spiegazione.
+- **Conversazioni**: il menu laterale è la lista delle chat, come in ChatGPT: *Nuova conversazione*, ricerca nei titoli e nei messaggi, gruppi per data (Oggi, Ieri, Ultimi 7 giorni…), rinomina ed elimina con una pressione lunga o dal menu **⋯**. Il titolo nasce dal primo messaggio; il brief del mattino apre una conversazione nuova. Diario, memoria e piani sono in comune a tutte le chat.
+- **Strumenti dal +**: il **+** del composer raccoglie tutto il resto: foto, acqua, scorciatoie, *Alimentazione* (valori nutrizionali, piano pasti, registra un pasto, diario di oggi), *Allenamento* (scheda, cerca esercizio) e *Memoria*.
+- **Memoria**: Nouri ricorda i cibi che ami (*"adoro il salmone"*), quelli che non ti piacciono (*"odio i funghi"*) e le abitudini (*"ricordati che a pranzo mangio in mensa"*). Li usa in idee, ricette e piani pasti. Si gestisce, e si spegne, da **Memoria** (dal **+** o dal profilo).
 - **Scorciatoie**: salva un pasto con il segnalibro sulla sua card, oppure scrivendo *"salvalo come colazione solita"*. Poi basta scrivere *"la solita colazione"*, o toccarla dal **+** o dal saluto iniziale, e finisce subito nel diario (con *Annulla* se serve). Funzionano anche con Claude, senza chiamate di rete.
 - **Ricerca rapida dei valori nutrizionali**: la lente nell'header apre una ricerca istantanea. Gli alimenti comuni arrivano subito dalla tabella interna, anche offline; i prodotti confezionati arrivano da [Open Food Facts](https://world.openfoodfacts.org) per nome o per codice a barre. Su iOS e Android c'è lo scanner (`expo-camera`), sul web si possono scrivere le cifre. Scegli la porzione e aggiungi al diario con un tocco.
-- **Piano pasti giornaliero o settimanale**: *"fammi un piano pasti"* in chat, oppure **Piano pasti** dal menu. Di default è la settimana; durata e stile predefiniti si scelgono da **Piano pasti** o da **Memoria**. Colazione, pranzo, spuntino e cena calibrati su calorie e macro, senza i cibi che eviti e con più spesso quelli che ami. Per ogni piatto puoi segnarlo come mangiato, cambiarlo o aprire la ricetta. Il piano di oggi compare anche in **Oggi** e nel brief del mattino.
+- **Piano pasti giornaliero o settimanale**: *"fammi un piano pasti"* in chat, oppure **Piano pasti** dal **+**. Di default è la settimana; durata e stile predefiniti si scelgono da **Piano pasti** o da **Memoria**. Colazione, pranzo, spuntino e cena calibrati su calorie e macro, senza i cibi che eviti e con più spesso quelli che ami. Per ogni piatto puoi segnarlo come mangiato, cambiarlo o aprire la ricetta. Il piano di oggi compare anche in **Oggi** e nel brief del mattino.
 - **Il piano resta in memoria**: Nouri sa cosa prevede ogni giorno (*"cosa mangio stasera?"*, *"cosa c'è giovedì a pranzo?"*) e ricorda cosa è già fatto. Se chiedi di nuovo un piano e ce l'hai già, ti mostra quello (lo rifà solo con *"rifai il piano"*). Cambiando piano, i pasti già mangiati restano e la spesa già presa resta spuntata. I piani sostituiti finiscono tra i **piani salvati**, da riusare (*"riusa il piano precedente"*). Un piatto del piano registrato da qualsiasi punto (per esempio dalla sua ricetta) viene spuntato da solo.
 - **Lista della spesa con le quantità**: gli ingredienti delle ricette sono sommati su tutti i giorni rimasti e moltiplicati per le porzioni del piano (*"Salmone · 300 g · 2 pasti · lun, gio"*), divisi per reparto; spezie e condimenti vanno in *Da controllare in dispensa*. Le spunte sono condivise tra chat e piano e si azzerano con un tocco.
 - **Piano modificabile parlando**: *"voglio mettere massa"*, *"sono diventato vegano"*, *"ora peso 68 kg"*, *"sono intollerante al lattosio"*, *"voglio più proteine"*. Nouri ricalcola i target e mostra cosa è cambiato.
 - **Brief del mattino**: al primo accesso di un nuovo giorno Nouri scrive per primo, con il resoconto di ieri, una nota e le idee per il prossimo pasto.
 - **Foto del piatto**: scatta o carica una foto e Nouri riconosce ingredienti e porzioni.
 - **Modalità voce**: orb a tutto schermo e risposte lette ad alta voce (`expo-speech`). La dettatura usa la Web Speech API su web e il microfono della tastiera su iOS e Android.
-- **Oggi**: anelli concentrici, barre dei macro, acqua, timeline dei pasti, i pasti del piano da segnare e una nota di Nouri.
+- **Oggi**: anelli concentrici, barre dei macro, acqua, timeline dei pasti, i pasti del piano da segnare, l'allenamento del giorno (se il modulo è attivo) e una nota di Nouri.
+- **Allenamento (modulo facoltativo)**: è spento finché non lo attivi dal profilo o chiedi una scheda. Fa per l'allenamento quello che il resto dell'app fa per il cibo:
+  - **scheda di esercizi** (come il piano pasti): obiettivo (forza, massa, dimagrire, in forma), livello, 2–6 allenamenti a settimana, corpo libero / casa / palestra e minuti per seduta. La settimana è divisa in sedute (total body, parte alta/gambe, spinta/tirata/gambe) con serie, ripetizioni e recuperi adatti all'obiettivo. Ogni esercizio si può cambiare con un altro dello stesso movimento; la seduta di oggi si segna come fatta e le kcal stimate compaiono in **Oggi**. Le schede precedenti restano salvate.
+  - **cerca esercizio** (come la ricerca dei valori nutrizionali): 51 esercizi in italiano, per nome o per muscolo, filtrabili per attrezzatura.
+  - **spiegazione dell'esercizio**: muscoli, passaggi numerati, consigli, errori da evitare e la versione più facile o più difficile.
+  - In chat: *"fammi una scheda 3 volte a corpo libero"*, *"cosa mi alleno oggi?"*, *"ho fatto l'allenamento"*, *"come si fa lo squat bulgaro?"*, *"esercizi per i glutei"*, *"cosa mangio dopo l'allenamento?"*. I comandi della scheda rispondono subito anche con Claude attivo; Claude riceve la scheda e le sedute fatte e sceglie i parametri, ma gli esercizi vengono sempre dal catalogo dell'app.
 
 ## Avvio
 
@@ -100,9 +110,11 @@ In produzione aggiungi autenticazione e rate limiting al proxy, e gestisci la ri
 ## Struttura
 
 ```
-app/                 schermate (chat, onboarding, oggi, profilo, voce, ricerca, memoria, piano pasti)
+app/                 schermate (chat, onboarding, oggi, profilo, voce, ricerca, memoria, piano pasti,
+                     allenamento, cerca esercizio)
 components/ui/       Orb, Glass/Card/Chip/bottoni, anelli, tipografia, sheet, menu, toast
-components/chat/     header, composer, messaggi, testo in streaming, stato "sto pensando"
+components/chat/     header, composer (+ con gli strumenti), messaggi, menu laterale delle conversazioni
+components/training/ spiegazione dell'esercizio, impostazioni della scheda
 components/widgets/  le card generative
 components/food/     scheda alimento, tabella nutrizionale, scanner del codice a barre
 lib/ai/              askNouri() → Claude o motore offline (scorciatoie sempre istantanee)
@@ -111,6 +123,9 @@ lib/mealplan.ts      generatore dei piani pasti, riuso dei piani salvati
 lib/grocery.ts       lista della spesa: ingredienti sommati con le quantità, per reparto
 lib/foodfacts.ts     valori nutrizionali della tabella interna
 lib/foodsearch.ts    Open Food Facts: ricerca per nome e codice a barre
+lib/exercises.ts     catalogo degli esercizi (passaggi, consigli, errori, varianti) e ricerca
+lib/workout.ts       generatore della scheda: split per giorni, serie e ripetizioni per obiettivo
+lib/ai/training.ts   comandi di allenamento del motore locale (scheda, oggi, fatto, spiegazioni)
 lib/store.ts         stato persistito (zustand + AsyncStorage)
 constants/theme.ts   design token
 ```
@@ -124,7 +139,7 @@ Per aggiungere un widget:
 
 ## Note
 
-- Le stime nutrizionali sono indicative e **non sostituiscono un professionista**. Il prompt di sistema chiede a Claude di non incoraggiare restrizioni e di suggerire un professionista se emergono segnali di disturbi alimentari.
+- Le stime nutrizionali e le kcal degli allenamenti sono indicative e **non sostituiscono un professionista**. Se in chat si parla di dolore o infortuni, Nouri suggerisce di fermarsi e sentire un medico o un fisioterapista. Il prompt di sistema chiede a Claude di non incoraggiare restrizioni e di suggerire un professionista se emergono segnali di disturbi alimentari.
 - Per la dettatura nativa dentro l'app, invece della tastiera, serve una development build con `expo-speech-recognition`.
 - Icone: set Solar di 480 Design, licenza CC BY 4.0.
 - Dati dei prodotti confezionati: Open Food Facts, licenza ODbL.

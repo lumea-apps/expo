@@ -9,6 +9,9 @@ import type {
   Profile,
   ProfilePatch,
   Shortcut,
+  TrainingSetup,
+  WorkoutLog,
+  WorkoutPlan,
 } from '../types';
 
 export interface BrainContext {
@@ -29,6 +32,11 @@ export interface BrainContext {
   /** What's already done: planned meals eaten (planMealKey → meal id) and list items bought. */
   planLog: Record<string, string>;
   checked: Record<string, boolean>;
+  /** Optional training module: off until the user turns it on or asks for a routine. */
+  training: { enabled: boolean; setup: TrainingSetup | null };
+  workoutPlan: WorkoutPlan | null;
+  /** Sessions done, newest first. */
+  workoutLog: WorkoutLog[];
 }
 
 export interface UserInput {
@@ -45,6 +53,8 @@ export interface BrainReply extends AssistantTurn {
   memory?: MemoryOps;
   /** Set for shortcuts: the first meal card is logged right away. */
   autoLog?: { shortcutId: string };
+  /** Set when the user says they trained: that session is marked done today. */
+  workoutDone?: { planId: string; sessionId: string };
   engine: 'claude' | 'local';
   /** Set when Claude was configured but unreachable and the local brain answered instead. */
   degraded?: boolean;

@@ -13,6 +13,7 @@ import { IconButton, PrimaryButton } from '@/components/ui/Surface';
 import { Toast, useToast } from '@/components/ui/Toast';
 import { Display, Sans } from '@/components/ui/Typography';
 import { colors, fonts, radii, type Tint } from '@/constants/theme';
+import { GOAL_ICON } from '@/constants/trainingIcons';
 import { haptic } from '@/lib/haptics';
 import { focusLabels, planTitle } from '@/lib/mealplan';
 import {
@@ -26,6 +27,7 @@ import {
 } from '@/lib/nutrition';
 import { logShortcut } from '@/lib/shortcuts';
 import { useNouri } from '@/lib/store';
+import { GOAL_LABELS, weekStart } from '@/lib/workout';
 import type { Meal, MealDraft, MemoryKind, MemoryNote, Shortcut } from '@/lib/types';
 
 const GROUPS: {
@@ -87,6 +89,9 @@ function MemoryContent() {
   const plan = useNouri((s) => s.plan);
   const pastPlans = useNouri((s) => s.pastPlans);
   const planPrefs = useNouri((s) => s.planPrefs);
+  const training = useNouri((s) => s.training);
+  const workoutPlan = useNouri((s) => s.workoutPlan);
+  const workoutLog = useNouri((s) => s.workoutLog);
   const activePlan = plan && plan.days.some((d) => d.date >= dayKey()) ? plan : null;
 
   const openShortcut = (sc: Shortcut) =>
@@ -339,6 +344,39 @@ function MemoryContent() {
             />
           ) : null}
         </MenuGroup>
+
+        {training.enabled && (
+          <MenuGroup
+            title="Allenamento"
+            footer="Nouri usa la scheda per rispondere a «cosa mi alleno oggi?» e tiene conto degli allenamenti fatti.">
+            {training.setup ? (
+              <MenuRow
+                icon={GOAL_ICON[training.setup.goal].icon}
+                tint={GOAL_ICON[training.setup.goal].tint}
+                label="Obiettivo"
+                value={GOAL_LABELS[training.setup.goal]}
+              />
+            ) : null}
+            <MenuRow
+              icon="dumbbells-2-bold-duotone"
+              tint="mint"
+              label="Scheda"
+              value={
+                workoutPlan
+                  ? `${workoutPlan.sessions.length} a settimana · ${workoutPlan.setup.minutes} min`
+                  : 'Da creare'
+              }
+              chevron
+              onPress={() => router.push('/training')}
+            />
+            <MenuRow
+              icon="medal-ribbon-star-bold-duotone"
+              tint="amber"
+              label="Fatti questa settimana"
+              value={String(workoutLog.filter((l) => l.date >= weekStart()).length)}
+            />
+          </MenuGroup>
+        )}
 
         <MenuGroup
           title="Scorciatoie"

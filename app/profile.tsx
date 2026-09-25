@@ -47,6 +47,9 @@ function ProfileContent() {
   const memories = useNouri((s) => s.memories);
   const shortcuts = useNouri((s) => s.shortcuts);
   const plan = useNouri((s) => s.plan);
+  const training = useNouri((s) => s.training);
+  const workoutPlan = useNouri((s) => s.workoutPlan);
+  const setTraining = useNouri((s) => s.setTraining);
 
   if (!profile) return null;
   const T = profile.targets;
@@ -253,6 +256,49 @@ function ProfileContent() {
         </MenuGroup>
 
         <MenuGroup
+          title="Allenamento"
+          footer="Facoltativo. Con il modulo attivo Nouri ti prepara una scheda e tiene conto degli allenamenti.">
+          <MenuRow
+            icon="dumbbells-2-bold-duotone"
+            tint="mint"
+            label="Modulo allenamento"
+            right={
+              <Switch
+                value={training.enabled}
+                onValueChange={(v) => {
+                  haptic.select();
+                  setTraining({ enabled: v });
+                }}
+                trackColor={{ true: colors.ink, false: colors.bgMuted }}
+                thumbColor={colors.bg}
+                {...({ activeThumbColor: colors.bg } as object)}
+              />
+            }
+          />
+          <MenuRow
+            icon="body-shape-bold-duotone"
+            tint="mint"
+            label="Scheda"
+            value={
+              training.enabled && workoutPlan
+                ? `${workoutPlan.sessions.length} a settimana`
+                : training.enabled
+                  ? 'Da creare'
+                  : 'Spento'
+            }
+            chevron
+            onPress={() => router.push('/training')}
+          />
+          <MenuRow
+            icon="dumbbell-small-bold-duotone"
+            tint="gray"
+            label="Cerca esercizio"
+            chevron
+            onPress={() => router.push('/exercises')}
+          />
+        </MenuGroup>
+
+        <MenuGroup
           title="Assistente"
           footer={
             engineInfo.id === 'local'
@@ -299,14 +345,14 @@ function ProfileContent() {
           <MenuRow
             icon="trash-bin-trash-bold-duotone"
             tint="gray"
-            label="Cancella la conversazione"
-            hint="Il diario resta"
+            label="Elimina tutte le conversazioni"
+            hint="Diario, memoria e piani restano"
             chevron
             onPress={() =>
               confirm(
-                'Cancellare la conversazione?',
-                'Il diario e il piano restano come sono.',
-                'Cancella conversazione',
+                'Eliminare tutte le conversazioni?',
+                'Diario, memoria, piano pasti e scheda restano come sono.',
+                'Elimina conversazioni',
                 clearChat
               )
             }

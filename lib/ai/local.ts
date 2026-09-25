@@ -45,6 +45,7 @@ import type {
   SwapFood,
   Widget,
 } from '../types';
+import { trainingBriefLine, trainingTurn } from './training';
 import type { BrainContext, BrainReply, UserInput } from './types';
 
 type Turn = AssistantTurn & {
@@ -52,6 +53,7 @@ type Turn = AssistantTurn & {
   profilePatch?: ProfilePatch;
   memory?: MemoryOps;
   autoLog?: BrainReply['autoLog'];
+  workoutDone?: BrainReply['workoutDone'];
 };
 
 function toReply(turn: Turn): BrainReply {
@@ -63,6 +65,7 @@ function toReply(turn: Turn): BrainReply {
     profilePatch: turn.profilePatch,
     memory: turn.memory,
     autoLog: turn.autoLog,
+    workoutDone: turn.workoutDone,
     engine: 'local',
   };
 }
@@ -73,12 +76,15 @@ export function localRespond(input: UserInput, ctx: BrainContext): BrainReply {
 
 /**
  * Answers that never need the network, whatever the engine: saving a meal as a
- * shortcut, using one ("la solita colazione") and reusing a past meal plan.
+ * shortcut, using one ("la solita colazione"), reusing a past meal plan and the
+ * training commands (routine, today's session, "ho fatto l'allenamento").
  */
 export function quickRespond(input: UserInput, ctx: BrainContext): BrainReply | null {
   if (input.image) return null;
   const name = parseShortcutName(input.text);
   if (name) return toReply(shortcutSaveTurn(name, ctx));
+  const training = trainingTurn(input.text, ctx, true);
+  if (training) return toReply(training);
   const t = normalize(input.text);
   if (REUSE_RE.test(t)) return toReply(reusePlanTurn(ctx));
   // the plan in memory: never made twice, and asked about without a round trip
@@ -105,6 +111,8 @@ function route(input: UserInput, ctx: BrainContext): Turn {
   if (planRequest) return mealPlanTurn(planRequest, ctx);
   const planned = plannedFor(t, ctx);
   if (planned) return planned;
+  const training = trainingTurn(input.text, ctx, false);
+  if (training) return training;
 
   const memory = parseMemory(input.text);
   const patch = parsePlanChange(t);
@@ -1384,13 +1392,16 @@ export function dailyBrief(ctx: BrainContext): BrainReply {
     const picks = pickRecipes(ctx, moment, { protein: proteinFocus }).slice(0, 3);
     if (picks.length) widgets.push({ type: 'ideas', ideas: picks.map(toIdea) });
   }
+  const workout = trainingBriefLine(ctx);
   return {
-    text: planned
-      ? `${text} Ecco cosa prevede il tuo piano per oggi:`
-      : `${text} Ecco da dove partirei per ${momentWord(moment)}:`,
+    text: `${text}${workout ? ` ${workout}` : ''} ${
+      planned
+        ? 'Ecco cosa prevede il tuo piano per oggi:'
+        : `Ecco da dove partirei per ${momentWord(moment)}:`
+    }`,
     widgets,
     suggestions: [
-      'Com’è andata la settimana?',
+      workout ? 'Cosa mi alleno oggi?' : 'Com’è andata la settimana?',
       `Idee per ${momentWord(nextMoment(moment))}`,
       'Ho bevuto un bicchiere d’acqua',
     ],

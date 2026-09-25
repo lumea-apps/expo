@@ -1,6 +1,14 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { BackHandler, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  BackHandler,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
@@ -13,38 +21,54 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/ui/Icon';
-import { Rings } from '@/components/ui/MacroRing';
-import { MenuRow } from '@/components/ui/Menu';
+import { MenuGroup, MenuRow } from '@/components/ui/Menu';
 import { Orb } from '@/components/ui/Orb';
-import { Mono, Sans } from '@/components/ui/Typography';
-import { colors, radii } from '@/constants/theme';
+import { useSheet, type CloseSheet } from '@/components/ui/Sheet';
+import { PrimaryButton } from '@/components/ui/Surface';
+import { Sans } from '@/components/ui/Typography';
+import { colors, fonts, radii } from '@/constants/theme';
+import { normalize } from '@/lib/foods';
 import { haptic } from '@/lib/haptics';
-import { dayKey, dayTotals, formatKcal, goalLabels, mealTotals } from '@/lib/nutrition';
-import { logShortcut } from '@/lib/shortcuts';
+import { dayKey, formatKcal, goalLabels } from '@/lib/nutrition';
 import { useNouri } from '@/lib/store';
+import type { Thread } from '@/lib/types';
 
 const WIDTH = 312;
 
-/** Left drawer, ChatGPT-style: new conversation, today at a glance, tools, shortcuts, profile. */
+const MONTHS = new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' });
+
+/** "Oggi", "Ieri", "Ultimi 7 giorni", "Ultimi 30 giorni", then month by month. */
+function groupOf(iso: string, now = new Date()): string {
+  const d = new Date(iso);
+  const today = dayKey(now);
+  const y = new Date(now);
+  y.setDate(now.getDate() - 1);
+  if (dayKey(d) === today) return 'Oggi';
+  if (dayKey(d) === dayKey(y)) return 'Ieri';
+  const days = (now.getTime() - d.getTime()) / 86_400_000;
+  if (days < 7) return 'Ultimi 7 giorni';
+  if (days < 30) return 'Ultimi 30 giorni';
+  const m = MONTHS.format(d);
+  return m.charAt(0).toUpperCase() + m.slice(1);
+}
+
+/** Left drawer, ChatGPT-style: new conversation, search, past conversations by date, profile. */
 export function SideMenu({
   visible,
   onClose,
-  onSend,
   onNewChat,
 }: {
   visible: boolean;
   onClose: () => void;
-  onSend: (text: string) => void;
   onNewChat: () => void;
 }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const sheet = useSheet();
   const profile = useNouri((s) => s.profile);
-  const meals = useNouri((s) => s.meals);
-  const water = useNouri((s) => s.water[dayKey()] ?? 0);
-  const plan = useNouri((s) => s.plan);
-  const memoryOn = useNouri((s) => s.memoryOn);
-  const shortcuts = useNouri((s) => s.shortcuts);
+  const threads = useNouri((s) => s.threads);
+  const activeId = useNouri((s) => s.threadId);
+  const [query, setQuery] = useState('');
   const [mounted, setMounted] = useState(visible);
   const progress = useSharedValue(0);
   const drag = useSharedValue(0);
@@ -55,6 +79,7 @@ export function SideMenu({
       drag.value = 0;
       progress.value = withTiming(1, { duration: 300, easing: Easing.out(Easing.cubic) });
     } else {
+      setQuery('');
       progress.value = withTiming(0, { duration: 220, easing: Easing.in(Easing.cubic) }, (done) => {
         if (done) runOnJS(setMounted)(false);
       });
@@ -69,6 +94,25 @@ export function SideMenu({
     });
     return () => sub.remove();
   }, [visible, onClose]);
+
+  // search matches titles and what was said in the conversation
+  const groups = useMemo(() => {
+    const q = normalize(query);
+    const list = q
+      ? threads.filter(
+          (t) =>
+            normalize(t.title).includes(q) || t.messages.some((m) => normalize(m.text).includes(q))
+        )
+      : threads;
+    const out: { title: string; items: Thread[] }[] = [];
+    for (const t of list) {
+      const g = groupOf(t.updatedAt);
+      const last = out[out.length - 1];
+      if (last?.title === g) last.items.push(t);
+      else out.push({ title: g, items: [t] });
+    }
+    return out;
+  }, [threads, query]);
 
   const pan = Gesture.Pan()
     .activeOffsetX(-8)
@@ -87,12 +131,50 @@ export function SideMenu({
 
   if (!mounted || !profile) return null;
 
-  const t = dayTotals(meals);
-  const T = profile.targets;
   const go = (fn: () => void) => {
     onClose();
     setTimeout(fn, 180);
   };
+
+  const open = (t: Thread) => {
+    haptic.select();
+    useNouri.getState().openThread(t.id);
+    onClose();
+  };
+
+  const options = (t: Thread) =>
+    sheet.open({
+      title: t.title,
+      subtitle: `${t.messages.length} messaggi`,
+      render: (close) => (
+        <MenuGroup>
+          <MenuRow
+            icon="pen-new-square-bold-duotone"
+            tint="gray"
+            label="Rinomina"
+            onPress={() =>
+              close(() =>
+                sheet.open({
+                  title: 'Rinomina la conversazione',
+                  render: (c) => <RenameThread thread={t} close={c} />,
+                })
+              )
+            }
+          />
+          <MenuRow
+            icon="trash-bin-trash-bold-duotone"
+            label="Elimina"
+            danger
+            onPress={() =>
+              close(() => {
+                useNouri.getState().deleteThread(t.id);
+                haptic.tap();
+              })
+            }
+          />
+        </MenuGroup>
+      ),
+    });
 
   return (
     <View style={[StyleSheet.absoluteFill, { zIndex: 900 }]}>
@@ -112,148 +194,94 @@ export function SideMenu({
           ]}>
           <View style={styles.brand}>
             <Orb size={26} shadow={false} />
-            <Sans size={18} weight="semi" style={{ letterSpacing: -0.4 }}>
+            <Sans size={18} weight="semi" style={{ letterSpacing: -0.4, flex: 1 }}>
               Nouri
             </Sans>
           </View>
 
+          <Pressable
+            onPress={() => {
+              haptic.tap();
+              go(onNewChat);
+            }}
+            style={({ pressed }) => [
+              styles.newChat,
+              pressed && { backgroundColor: colors.bgMuted },
+            ]}>
+            <Icon name="pen-new-square-linear" size={20} />
+            <Sans size={15} weight="medium">
+              Nuova conversazione
+            </Sans>
+          </Pressable>
+
+          <View style={styles.search}>
+            <Icon name="magnifer-linear" size={16} color={colors.faint} />
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Cerca nelle conversazioni"
+              placeholderTextColor={colors.faint}
+              selectionColor={colors.ink}
+              style={styles.searchInput}
+            />
+            {query ? (
+              <Pressable accessibilityLabel="Cancella" hitSlop={8} onPress={() => setQuery('')}>
+                <Icon name="close-circle-bold" size={16} color={colors.faint} />
+              </Pressable>
+            ) : null}
+          </View>
+
           <ScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={{ gap: 18 }}
+            contentContainerStyle={{ paddingBottom: 12 }}
+            keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
-            <Pressable
-              onPress={() => {
-                haptic.tap();
-                go(onNewChat);
-              }}
-              style={({ pressed }) => [
-                styles.newChat,
-                pressed && { backgroundColor: colors.bgMuted },
-              ]}>
-              <Icon name="pen-new-square-linear" size={20} />
-              <Sans size={15} weight="medium">
-                Nuova conversazione
+            {groups.length === 0 ? (
+              <Sans size={13} color={colors.faint} style={styles.empty}>
+                {query
+                  ? 'Nessuna conversazione con queste parole.'
+                  : 'Le tue conversazioni compariranno qui.'}
               </Sans>
-            </Pressable>
-
-            <Pressable
-              onPress={() => go(() => router.push('/today'))}
-              style={({ pressed }) => [
-                styles.today,
-                pressed && { backgroundColor: colors.bgSubtle },
-              ]}>
-              <Rings
-                size={48}
-                stroke={5}
-                gap={2}
-                rings={[
-                  { progress: t.kcal / T.kcal, color: colors.ink },
-                  { progress: t.protein / T.protein, color: colors.protein },
-                ]}
-              />
-              <View style={{ flex: 1 }}>
-                <Sans size={13} color={colors.faint}>
-                  Oggi
+            ) : null}
+            {groups.map((g) => (
+              <View key={g.title} style={{ marginTop: 14 }}>
+                <Sans size={12} weight="medium" color={colors.faint} style={styles.section}>
+                  {g.title}
                 </Sans>
-                <Sans size={15} weight="semi">
-                  <Mono size={15} weight="medium" color={colors.ink}>
-                    {formatKcal(t.kcal)}
-                  </Mono>{' '}
-                  di {formatKcal(T.kcal)} kcal
-                </Sans>
-                <Sans size={12} color={colors.faint}>
-                  Proteine {Math.round(t.protein)} / {T.protein} g
-                </Sans>
+                {g.items.map((t) => {
+                  const on = t.id === activeId;
+                  return (
+                    <Pressable
+                      key={t.id}
+                      onPress={() => open(t)}
+                      onLongPress={() => {
+                        haptic.tap();
+                        options(t);
+                      }}
+                      style={({ pressed }) => [
+                        styles.thread,
+                        on && { backgroundColor: colors.bgMuted },
+                        pressed && !on && { backgroundColor: colors.bgSubtle },
+                      ]}>
+                      <Sans
+                        size={14}
+                        weight={on ? 'medium' : 'regular'}
+                        numberOfLines={1}
+                        style={{ flex: 1 }}>
+                        {t.title}
+                      </Sans>
+                      <Pressable
+                        accessibilityLabel={`Opzioni per ${t.title}`}
+                        hitSlop={8}
+                        onPress={() => options(t)}
+                        style={styles.more}>
+                        <Icon name="menu-dots-bold" size={16} color={colors.faint} />
+                      </Pressable>
+                    </Pressable>
+                  );
+                })}
               </View>
-              <Icon name="alt-arrow-right-linear" size={16} color={colors.faint} />
-            </Pressable>
-
-            <View>
-              <Sans size={13} weight="medium" color={colors.faint} style={styles.section}>
-                Strumenti
-              </Sans>
-              <MenuRow
-                icon="magnifer-bold-duotone"
-                tint="blue"
-                label="Cerca valori nutrizionali"
-                onPress={() => go(() => router.push('/search'))}
-              />
-              <MenuRow
-                icon="calendar-bold-duotone"
-                tint="violet"
-                label="Piano pasti"
-                value={plan ? (plan.kind === 'week' ? 'Settimana' : 'Giorno') : undefined}
-                onPress={() => go(() => router.push('/meal-plan'))}
-              />
-              <MenuRow
-                icon="brain-bold-duotone"
-                tint="violet"
-                label="Memoria"
-                value={memoryOn ? undefined : 'Spenta'}
-                onPress={() => go(() => router.push('/memory'))}
-              />
-              <MenuRow
-                icon="notebook-bold-duotone"
-                tint="gray"
-                label="Diario di oggi"
-                onPress={() => go(() => router.push('/today'))}
-              />
-            </View>
-
-            {shortcuts.length > 0 && (
-              <View>
-                <Sans size={13} weight="medium" color={colors.faint} style={styles.section}>
-                  Le tue scorciatoie
-                </Sans>
-                {shortcuts.slice(0, 4).map((sc) => (
-                  <MenuRow
-                    key={sc.id}
-                    icon="bolt-circle-bold-duotone"
-                    tint="amber"
-                    label={sc.name}
-                    value={`${formatKcal(mealTotals(sc.meal).kcal)} kcal`}
-                    onPress={() => go(() => logShortcut(sc))}
-                  />
-                ))}
-              </View>
-            )}
-
-            <View>
-              <Sans size={13} weight="medium" color={colors.faint} style={styles.section}>
-                Chiedi a Nouri
-              </Sans>
-              <MenuRow
-                icon="chef-hat-heart-bold-duotone"
-                tint="peach"
-                label="Idee per il prossimo pasto"
-                onPress={() => go(() => onSend('Idee per il prossimo pasto'))}
-              />
-              <MenuRow
-                icon="chart-2-bold-duotone"
-                tint="violet"
-                label="Andamento della settimana"
-                onPress={() => go(() => onSend('Com’è andata la settimana?'))}
-              />
-              <MenuRow
-                icon="cart-large-2-bold-duotone"
-                tint="mint"
-                label="Lista della spesa"
-                onPress={() => go(() => onSend('Fammi la lista della spesa'))}
-              />
-              <MenuRow
-                icon="waterdrops-bold-duotone"
-                tint="sky"
-                label="Acqua"
-                value={`${(water / 1000).toLocaleString('it-IT', { maximumFractionDigits: 2 })} / ${(T.water / 1000).toLocaleString('it-IT')} L`}
-                onPress={() => go(() => onSend('Com’è messa l’acqua oggi?'))}
-              />
-              <MenuRow
-                icon="soundwave-bold-duotone"
-                tint="gray"
-                label="Parla con Nouri"
-                onPress={() => go(() => router.push('/voice'))}
-              />
-            </View>
+            ))}
           </ScrollView>
 
           <Pressable
@@ -272,13 +300,39 @@ export function SideMenu({
                 {profile.name}
               </Sans>
               <Sans size={12} color={colors.faint}>
-                {goalLabels[profile.goal]} · {formatKcal(T.kcal)} kcal
+                {goalLabels[profile.goal]} · {formatKcal(profile.targets.kcal)} kcal
               </Sans>
             </View>
             <Icon name="settings-linear" size={20} color={colors.dim} />
           </Pressable>
         </Animated.View>
       </GestureDetector>
+    </View>
+  );
+}
+
+function RenameThread({ thread, close }: { thread: Thread; close: CloseSheet }) {
+  const [title, setTitle] = useState(thread.title);
+  const save = () => {
+    if (!title.trim()) return;
+    useNouri.getState().renameThread(thread.id, title);
+    haptic.success();
+    close();
+  };
+  return (
+    <View style={{ gap: 14 }}>
+      <TextInput
+        value={title}
+        onChangeText={setTitle}
+        autoFocus
+        selectTextOnFocus
+        maxLength={60}
+        returnKeyType="done"
+        onSubmitEditing={save}
+        selectionColor={colors.ink}
+        style={styles.rename}
+      />
+      <PrimaryButton label="Salva" disabled={!title.trim()} onPress={save} />
     </View>
   );
 }
@@ -302,7 +356,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 9,
     paddingHorizontal: 8,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   newChat: {
     flexDirection: 'row',
@@ -313,16 +367,37 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     backgroundColor: colors.bgSubtle,
   },
-  today: {
+  search: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    padding: 12,
-    borderRadius: radii.lg,
+    gap: 8,
+    height: 40,
+    paddingHorizontal: 12,
+    marginTop: 8,
+    borderRadius: radii.md,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  section: { marginLeft: 8, marginBottom: 2 },
+  searchInput: {
+    flex: 1,
+    height: 40,
+    color: colors.ink,
+    fontFamily: fonts.sans,
+    fontSize: 14,
+    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null),
+  },
+  section: { marginLeft: 10, marginBottom: 4 },
+  empty: { marginTop: 18, marginHorizontal: 10, lineHeight: 19 },
+  thread: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 40,
+    paddingLeft: 10,
+    paddingRight: 4,
+    borderRadius: radii.sm,
+  },
+  more: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
   profile: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -340,5 +415,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgMuted,
+  },
+  rename: {
+    height: 50,
+    paddingHorizontal: 14,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    color: colors.ink,
+    fontFamily: fonts.sansMedium,
+    fontSize: 16,
+    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null),
   },
 });

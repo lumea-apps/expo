@@ -67,6 +67,15 @@ const ICONS = [
   'shuffle-bold-duotone',
   'clipboard-list-bold-duotone',
   'tuning-bold-duotone',
+  // training
+  'dumbbell-small-bold-duotone',
+  'dumbbells-2-bold-duotone',
+  'body-shape-bold-duotone',
+  'stretching-bold-duotone',
+  'treadmill-bold-duotone',
+  'medal-ribbon-star-bold-duotone',
+  'meditation-round-bold-duotone',
+  'play-bold',
   // chrome (linear / bold)
   'hamburger-menu-linear',
   'pen-new-square-linear',

@@ -1,6 +1,13 @@
 import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import {
+  Platform,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { Icon } from '@/components/ui/Icon';
@@ -25,6 +32,7 @@ export function Composer({
 }) {
   const router = useRouter();
   const sheet = useSheet();
+  const { height } = useWindowDimensions();
   const input = useRef<TextInput>(null);
   const [text, setText] = useState('');
 
@@ -44,11 +52,14 @@ export function Composer({
   };
 
   const openAttach = () => {
-    const { shortcuts, plan } = useNouri.getState();
-    const favourite = [...shortcuts].sort((a, b) => b.uses - a.uses).slice(0, 2);
+    const { shortcuts, plan, training, workoutPlan } = useNouri.getState();
+    const favourite = [...shortcuts].sort((a, b) => b.uses - a.uses).slice(0, 3);
+    const trainingOn = training.enabled && Boolean(workoutPlan);
     sheet.open({
       render: (close) => (
-        <View>
+        <ScrollView
+          style={{ maxHeight: Math.round(height * 0.72) }}
+          showsVerticalScrollIndicator={false}>
           <ActionTiles
             items={[
               ...(Platform.OS !== 'web'
@@ -76,33 +87,42 @@ export function Composer({
                       close(() => router.push({ pathname: '/search', params: { scan: '1' } })),
                   }
                 : {
-                    icon: 'magnifer-bold-duotone',
-                    tint: 'blue',
-                    label: 'Cerca alimento',
-                    onPress: () => close(() => router.push('/search')),
+                    icon: 'waterdrop-bold-duotone',
+                    tint: 'sky',
+                    label: 'Acqua',
+                    onPress: () => close(() => onSend({ text: 'Ho bevuto un bicchiere d’acqua' })),
                   },
             ]}
           />
-          <MenuGroup>
-            {favourite.map((sc) => (
-              <MenuRow
-                key={sc.id}
-                icon="bolt-circle-bold-duotone"
-                tint="amber"
-                label={sc.name}
-                hint={`Registra subito · ${formatKcal(mealTotals(sc.meal).kcal)} kcal`}
-                onPress={() => close(() => logShortcut(sc))}
-              />
-            ))}
-            {Platform.OS !== 'web' ? (
-              <MenuRow
-                icon="magnifer-bold-duotone"
-                tint="blue"
-                label="Cerca valori nutrizionali"
-                hint="Alimenti e prodotti, anche offline"
-                onPress={() => close(() => router.push('/search'))}
-              />
-            ) : null}
+          {favourite.length > 0 && (
+            <MenuGroup title="Scorciatoie" style={styles.group}>
+              {favourite.map((sc) => (
+                <MenuRow
+                  key={sc.id}
+                  icon="bolt-circle-bold-duotone"
+                  tint="amber"
+                  label={sc.name}
+                  hint={`Registra subito · ${formatKcal(mealTotals(sc.meal).kcal)} kcal`}
+                  onPress={() => close(() => logShortcut(sc))}
+                />
+              ))}
+            </MenuGroup>
+          )}
+          <MenuGroup title="Alimentazione" style={styles.group}>
+            <MenuRow
+              icon="magnifer-bold-duotone"
+              tint="blue"
+              label="Cerca valori nutrizionali"
+              hint="Alimenti e prodotti, anche col codice a barre"
+              onPress={() => close(() => router.push('/search'))}
+            />
+            <MenuRow
+              icon="calendar-bold-duotone"
+              tint="violet"
+              label={plan ? 'Il tuo piano pasti' : 'Piano pasti'}
+              hint={plan ? 'Oggi, la settimana e la spesa' : 'Per oggi o per tutta la settimana'}
+              onPress={() => close(() => router.push('/meal-plan'))}
+            />
             <MenuRow
               icon="plate-bold-duotone"
               tint="peach"
@@ -116,26 +136,50 @@ export function Composer({
               }
             />
             <MenuRow
-              icon="calendar-bold-duotone"
-              tint="violet"
-              label={plan ? 'Il tuo piano pasti' : 'Crea un piano pasti'}
-              hint={plan ? 'Oggi e il resto della settimana' : 'Per oggi o per tutta la settimana'}
-              onPress={() => close(() => router.push('/meal-plan'))}
+              icon="pie-chart-2-bold-duotone"
+              tint="mint"
+              label="Diario di oggi"
+              hint="Calorie, macro, acqua e pasti"
+              onPress={() => close(() => router.push('/today'))}
+            />
+            {Platform.OS !== 'web' ? (
+              <MenuRow
+                icon="waterdrop-bold-duotone"
+                tint="sky"
+                label="Un bicchiere d’acqua"
+                onPress={() => close(() => onSend({ text: 'Ho bevuto un bicchiere d’acqua' }))}
+              />
+            ) : null}
+          </MenuGroup>
+          <MenuGroup
+            title="Allenamento"
+            footer={trainingOn ? undefined : 'Facoltativo: attivalo solo se ti serve.'}
+            style={styles.group}>
+            <MenuRow
+              icon="dumbbells-2-bold-duotone"
+              tint="mint"
+              label={trainingOn ? 'La tua scheda' : 'Scheda di allenamento'}
+              hint={trainingOn ? 'Oggi e il resto della settimana' : 'Creala in pochi tocchi'}
+              onPress={() => close(() => router.push('/training'))}
             />
             <MenuRow
-              icon="waterdrop-bold-duotone"
-              tint="sky"
-              label="Un bicchiere d’acqua"
-              onPress={() => close(() => onSend({ text: 'Ho bevuto un bicchiere d’acqua' }))}
-            />
-            <MenuRow
-              icon="chef-hat-heart-bold-duotone"
-              tint="amber"
-              label="Idee per il prossimo pasto"
-              onPress={() => close(() => onSend({ text: 'Idee per il prossimo pasto' }))}
+              icon="dumbbell-small-bold-duotone"
+              tint="gray"
+              label="Cerca esercizio"
+              hint="Come si fa, muscoli, errori da evitare"
+              onPress={() => close(() => router.push('/exercises'))}
             />
           </MenuGroup>
-        </View>
+          <MenuGroup style={styles.group}>
+            <MenuRow
+              icon="brain-bold-duotone"
+              tint="violet"
+              label="Memoria"
+              hint="Gusti, abitudini e scorciatoie"
+              onPress={() => close(() => router.push('/memory'))}
+            />
+          </MenuGroup>
+        </ScrollView>
       ),
     });
   };
@@ -202,6 +246,7 @@ export function Composer({
 
 const styles = StyleSheet.create({
   wrap: { gap: 10 },
+  group: { marginTop: 16 },
   bar: { flexDirection: 'row', alignItems: 'flex-end', gap: 4, padding: 6 },
   plus: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: colors.border },
   input: {

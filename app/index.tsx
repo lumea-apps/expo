@@ -29,7 +29,7 @@ export default function ChatScreen() {
   const send = useSend();
   const [menuOpen, setMenuOpen] = useState(false);
   const closeMenu = useCallback(() => setMenuOpen(false), []);
-  const newChat = useCallback(() => useNouri.getState().clearChat(), []);
+  const newChat = useCallback(() => useNouri.getState().newThread(), []);
 
   const scroll = useRef<ScrollView>(null);
   // Follow the conversation unless the user scrolled up to read. Scroll events
@@ -54,7 +54,8 @@ export default function ChatScreen() {
     if (img) sendInput({ text: '', image: img });
   }, [sendInput]);
 
-  // First open of a new day: Nouri starts the conversation with a short brief.
+  // First open of a new day: Nouri opens a new conversation with a short brief
+  // (yesterday's stays in the side menu).
   const hasProfile = Boolean(profile);
   useEffect(() => {
     if (!hydrated || !hasProfile) return;
@@ -62,9 +63,10 @@ export default function ChatScreen() {
     const today = dayKey();
     if (s.lastBrief === today) return;
     s.markBrief(today);
-    const last = s.messages[s.messages.length - 1];
-    if (!last || dayKey(last.at) === today || !s.profile) return;
-    const ctx = brainContext();
+    const lastActivity = s.threads[0]?.updatedAt;
+    if (!lastActivity || dayKey(lastActivity) === today || !s.profile) return;
+    if (s.messages.length) s.newThread();
+    const ctx = brainContext([]);
     if (!ctx) return;
     const brief = dailyBrief(ctx);
     s.pushMessage(
@@ -150,7 +152,7 @@ export default function ChatScreen() {
           </View>
         </KeyboardAvoidingView>
         <ChatHeader onMenu={() => setMenuOpen(true)} />
-        <SideMenu visible={menuOpen} onClose={closeMenu} onSend={sendText} onNewChat={newChat} />
+        <SideMenu visible={menuOpen} onClose={closeMenu} onNewChat={newChat} />
       </View>
     </SheetProvider>
   );

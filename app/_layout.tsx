@@ -57,6 +57,8 @@ export default function RootLayout() {
           <Stack.Screen name="search" options={{ presentation: 'modal' }} />
           <Stack.Screen name="memory" options={{ presentation: 'modal' }} />
           <Stack.Screen name="meal-plan" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="training" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="exercises" options={{ presentation: 'modal' }} />
           <Stack.Screen
             name="voice"
             options={{ presentation: 'fullScreenModal', animation: 'fade' }}

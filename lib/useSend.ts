@@ -5,6 +5,7 @@ import { askNouri, type BrainContext, type BrainReply, type UserInput } from './
 import { haptic } from './haptics';
 import { applyProfilePatch, dayKey } from './nutrition';
 import { useNouri } from './store';
+import { logSession } from './training';
 import type { MemoryChange, MemoryOps, Widget } from './types';
 
 /** Strips the light markdown we use in replies so TTS reads clean sentences. */
@@ -24,7 +25,7 @@ export function speak(text: string, onDone?: () => void) {
   });
 }
 
-/** What the brains see: profile, diary, memory (only when on), shortcuts and the active plan. */
+/** What the brains see: profile, diary, memory (only when on), shortcuts, the active plan and training. */
 export function brainContext(history = useNouri.getState().messages): BrainContext | null {
   const s = useNouri.getState();
   if (!s.profile) return null;
@@ -41,6 +42,9 @@ export function brainContext(history = useNouri.getState().messages): BrainConte
     planPrefs: s.planPrefs,
     planLog: s.planLog,
     checked: s.checked,
+    training: s.training,
+    workoutPlan: s.workoutPlan,
+    workoutLog: s.workoutLog,
   };
 }
 
@@ -89,6 +93,10 @@ export function useSend() {
           // keeps meals already eaten, so the card shows the plan as it really is
           widgets[pi] = { type: 'meal_plan', plan: useNouri.getState().activatePlan(newPlan.plan) };
         }
+        // same for a new training routine (it also turns the module on)
+        const wp = widgets.find((w) => w.type === 'workout_plan');
+        if (wp?.type === 'workout_plan' && wp.plan.id !== useNouri.getState().workoutPlan?.id)
+          useNouri.getState().activateWorkoutPlan(wp.plan);
         const current = useNouri.getState().profile;
         if (reply.profilePatch && current) {
           const { profile, changes } = applyProfilePatch(current, reply.profilePatch);
@@ -123,6 +131,12 @@ export function useSend() {
             useNouri.getState().countShortcutUse(reply.autoLog.shortcutId);
             haptic.success();
           }
+        }
+        if (reply.workoutDone) {
+          const { workoutPlan } = useNouri.getState();
+          const session = workoutPlan?.sessions.find((x) => x.id === reply.workoutDone!.sessionId);
+          if (workoutPlan && session && workoutPlan.id === reply.workoutDone.planId)
+            logSession(workoutPlan, session);
         }
         haptic.soft();
         if (opts.speak || useNouri.getState().speakReplies) speak(reply.text);

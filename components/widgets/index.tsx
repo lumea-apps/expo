@@ -6,6 +6,7 @@ import { GroceryCard, IdeasCarousel, RecipeCard, SwapCard } from './FoodCards';
 import { MealLogCard } from './MealLogCard';
 import { MemoryCard } from './MemoryCard';
 import { MealPlanCard } from './PlanCard';
+import { ExerciseCardView, ExercisesList, WorkoutPlanCard } from './TrainingCards';
 
 /** Maps a generative-UI block from the assistant to its interactive card. */
 export function WidgetView({
@@ -48,6 +49,12 @@ export function WidgetView({
       return <FoodFactsCard food={widget.food} widgetKey={widgetKey} />;
     case 'memory':
       return <MemoryCard changes={widget.changes} recall={widget.recall} />;
+    case 'workout_plan':
+      return <WorkoutPlanCard plan={widget.plan} sessionId={widget.sessionId} onSend={onSend} />;
+    case 'exercise':
+      return <ExerciseCardView exercise={widget.exercise} onSend={onSend} />;
+    case 'exercises':
+      return <ExercisesList title={widget.title} items={widget.items} />;
     default:
       return null;
   }

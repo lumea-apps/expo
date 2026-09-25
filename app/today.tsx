@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Icon } from '@/components/ui/Icon';
+import { Icon, IconTile } from '@/components/ui/Icon';
 import { MacroBar, Rings } from '@/components/ui/MacroRing';
 import { MenuGroup, MenuRow } from '@/components/ui/Menu';
 import { SheetProvider, useSheet } from '@/components/ui/Sheet';
@@ -15,9 +15,11 @@ import { haptic } from '@/lib/haptics';
 import { planMealKey, servingsLabel } from '@/lib/mealplan';
 import { dayKey, dayTotals, formatKcal, formatTime, mealsOn, mealTotals } from '@/lib/nutrition';
 import { useNouri } from '@/lib/store';
+import { logSession } from '@/lib/training';
 import type { Meal } from '@/lib/types';
 import { useAnimatedNumber } from '@/lib/useAnimatedNumber';
 import { useSend } from '@/lib/useSend';
+import { nextSession, sessionKcal, sessionOn, WEEKDAY_LONG } from '@/lib/workout';
 
 function longDate(d = new Date()): string {
   const s = d.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -44,6 +46,11 @@ function TodayContent() {
   const plan = useNouri((s) => s.plan);
   const planLog = useNouri((s) => s.planLog);
   const planned = plan?.days.find((d) => d.date === dayKey());
+  const workoutPlan = useNouri((s) => (s.training.enabled ? s.workoutPlan : null));
+  const workoutLog = useNouri((s) => s.workoutLog);
+  const workout = workoutPlan ? sessionOn(workoutPlan) : undefined;
+  const nextWorkout = workoutPlan && !workout ? nextSession(workoutPlan, new Date(), true) : null;
+  const workoutDone = workoutLog.filter((l) => l.date === dayKey());
 
   const T = profile?.targets ?? { kcal: 2000, protein: 120, carbs: 230, fat: 65, water: 2000 };
   const t = dayTotals(meals);
@@ -319,6 +326,62 @@ function TodayContent() {
           </>
         )}
 
+        {workoutPlan && (
+          <>
+            <View style={styles.sectionRow}>
+              <Sans size={15} weight="semi">
+                Allenamento di oggi
+              </Sans>
+              <Pressable hitSlop={8} onPress={() => router.push('/training')}>
+                <Sans size={13} weight="medium" color={colors.dim}>
+                  Apri la scheda
+                </Sans>
+              </Pressable>
+            </View>
+            <Card>
+              <Pressable
+                onPress={() => router.push('/training')}
+                style={({ pressed }) => [
+                  styles.meal,
+                  pressed && { backgroundColor: colors.bgSubtle },
+                ]}>
+                <IconTile
+                  name={workout ? 'dumbbells-2-bold-duotone' : 'meditation-round-bold-duotone'}
+                  tint={workout ? 'mint' : 'sky'}
+                  size={36}
+                />
+                <View style={{ flex: 1 }}>
+                  <Sans size={14} weight="medium" numberOfLines={1}>
+                    {workout ? workout.name : 'Giorno di riposo'}
+                  </Sans>
+                  <Sans size={12} color={colors.faint} numberOfLines={1}>
+                    {workout
+                      ? `${workout.exercises.length} esercizi · ${workout.minutes} min · ~${formatKcal(sessionKcal(workout, profile?.weight ?? 70))} kcal`
+                      : nextWorkout
+                        ? `Prossimo: ${WEEKDAY_LONG[nextWorkout.session.weekday]} · ${nextWorkout.session.name}`
+                        : 'Recupero e una passeggiata'}
+                  </Sans>
+                </View>
+                {workout &&
+                  (workoutDone.some(
+                    (l) => l.sessionId === workout.id && l.planId === workoutPlan.id
+                  ) ? (
+                    <Icon name="check-circle-bold" size={20} color={colors.positive} />
+                  ) : (
+                    <Pressable
+                      hitSlop={6}
+                      onPress={() => logSession(workoutPlan, workout)}
+                      style={styles.doneBtn}>
+                      <Sans size={13} weight="medium" color={colors.onAccent}>
+                        Fatto
+                      </Sans>
+                    </Pressable>
+                  ))}
+              </Pressable>
+            </Card>
+          </>
+        )}
+
         <View style={{ marginTop: 16 }}>
           <InsightCard tone={note.tone} title={note.title} body={note.body} />
         </View>
@@ -348,6 +411,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   divider: { borderTopWidth: 1, borderColor: colors.border },
+  doneBtn: {
+    height: 30,
+    paddingHorizontal: 14,
+    borderRadius: radii.pill,
+    backgroundColor: colors.ink,
+    justifyContent: 'center',
+  },
   sectionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

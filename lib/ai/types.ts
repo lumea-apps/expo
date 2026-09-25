@@ -26,6 +26,9 @@ export interface BrainContext {
   pastPlans: MealPlan[];
   /** Default duration and style when the user asks for a plan without saying. */
   planPrefs: PlanPrefs;
+  /** What's already done: planned meals eaten (planMealKey → meal id) and list items bought. */
+  planLog: Record<string, string>;
+  checked: Record<string, boolean>;
 }
 
 export interface UserInput {

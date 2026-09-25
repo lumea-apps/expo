@@ -33,7 +33,9 @@ export function WidgetView({
     case 'water':
       return <WaterCard />;
     case 'grocery':
-      return <GroceryCard sections={widget.sections} widgetKey={widgetKey} />;
+      return (
+        <GroceryCard sections={widget.sections} widgetKey={widgetKey} planId={widget.planId} />
+      );
     case 'week':
       return <WeekChart />;
     case 'targets':

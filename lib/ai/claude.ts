@@ -12,7 +12,8 @@ import './polyfill';
 
 import Anthropic from '@anthropic-ai/sdk';
 
-import { planContext } from '../mealplan';
+import { entryOf } from '../grocery';
+import { planContext, planMealKey } from '../mealplan';
 import { memoryContext } from '../memory';
 import {
   AVOID_OPTIONS,
@@ -74,7 +75,7 @@ Ogni risposta è un oggetto JSON con:
   • recipe — una ricetta completa (ingredienti con dosi per 1 persona, 3–5 passaggi).
   • insight — un'osservazione breve e concreta sui dati (tone: positive | neutral | warning).
   • water — tracker dell'acqua della giornata.
-  • grocery — lista della spesa raggruppata per reparto.
+  • grocery — lista della spesa raggruppata per reparto (Ortofrutta, Macelleria, Pescheria, Frigo, Panetteria, Dispensa, Surgelati). Ogni voce ha "qty" con la quantità totale da comprare, sommata su tutti i pasti e le persone ("300 g", "4", "2 fette", "q.b." per spezie e condimenti) e "note" brevissima su dove serve ("2 pasti · lun, gio") oppure "". Per la spesa del piano pasti attivo l'app ha già la sua lista con le quantità: non serve rifarla.
   • week — grafico delle calorie degli ultimi 7 giorni.
   • swap — uno scambio furbo: alimento di partenza → alternativa, con motivo.
   • meal_plan — un piano pasti quando l'utente lo chiede: 1 giorno ("start" today o tomorrow) oppure 7 giorni per la settimana. Se non dice la durata, usa quella predefinita indicata in <piani>. Ogni giorno ha 4 pasti in quest'ordine: Colazione, Pranzo, Spuntino, Cena, con kcal e macro della porzione e minuti di preparazione. Ogni giorno entro ±8% del target calorico e vicino al target di proteine; piatti italiani realistici e vari (nessun piatto più di 2 volte a settimana, mai due giorni di fila). "focus": balanced | protein | quick | light. Nel testo 1–2 frasi (media di kcal e proteine, cosa hai escluso): non elencare i piatti. L'app salva il piano come piano attivo.
@@ -92,7 +93,8 @@ Ogni risposta è un oggetto JSON con:
 MEMORIA
 - Il blocco <memoria> è ciò che sai dell'utente: rispettalo sempre. Mai proporre cibi che non gli piacciono, proponi più spesso quelli che ama, tieni conto delle abitudini. Non ripeterlo nel testo se non serve.
 - Le scorciatoie sono pasti salvati con un nome: l'app le registra da sola quando l'utente le nomina.
-- <piani> contiene il piano pasti attivo, giorno per giorno: è in memoria, usalo quando l'utente chiede cosa mangiare oggi, stasera, domani o in un altro giorno, e rispondi con i piatti del piano invece di inventarne altri. Per modificarlo crea un nuovo meal_plan (il precedente resta tra i piani salvati).
+- Se c'è già un piano attivo che copre ciò che l'utente chiede, non crearne un altro: ricordagli che ce l'ha già e rifallo solo se lo chiede esplicitamente ("rifai", "nuovo", "diverso").
+- <piani> contiene il piano pasti attivo, giorno per giorno, con i pasti già mangiati: è in memoria, usalo quando l'utente chiede cosa mangiare oggi, stasera, domani o in un altro giorno, e rispondi con i piatti del piano invece di inventarne altri. Per modificarlo crea un nuovo meal_plan (il precedente resta tra i piani salvati).
 
 PRINCIPI
 - Usa il contesto <oggi> per personalizzare: macro rimanenti, pasti già registrati, obiettivo, dieta, alimenti da evitare. Non proporre mai cibi che l'utente evita o incompatibili con la sua dieta.
@@ -176,7 +178,10 @@ const TURN_SCHEMA = obj({
         widgetOf('grocery', {
           sections: {
             type: 'array',
-            items: obj({ title: STR, items: { type: 'array', items: STR } }),
+            items: obj({
+              title: STR,
+              items: { type: 'array', items: obj({ name: STR, qty: STR, note: STR }) },
+            }),
           },
         }),
         widgetOf('week'),
@@ -266,7 +271,10 @@ function contextBlock(ctx: BrainContext): string {
   const prefs = `Durata predefinita per un nuovo piano: ${ctx.planPrefs.kind === 'week' ? 'settimana (7 giorni)' : 'un giorno'} · stile ${ctx.planPrefs.focus}`;
   const plan = `\n<piani>\n${prefs}\nPiani precedenti salvati: ${ctx.pastPlans.length}\n${
     active
-      ? `Piano attivo:\n${planContext({ ...active, days: active.days.filter((d) => d.date >= todayKey) })}`
+      ? `Piano attivo:\n${planContext(
+          { ...active, days: active.days.filter((d) => d.date >= todayKey) },
+          (date, i) => Boolean(ctx.planLog[planMealKey(active.id, date, i)])
+        )}`
       : 'Nessun piano attivo.'
   }\n</piani>`;
   return `${memory}${plan}
@@ -520,7 +528,17 @@ function sanitize(raw: Partial<AssistantTurn>): AssistantTurn {
         if (w.recipe?.title) widgets.push(w);
         break;
       case 'grocery':
-        if (w.sections?.length) widgets.push(w);
+        if (w.sections?.length)
+          widgets.push({
+            type: 'grocery',
+            sections: w.sections.map((sec) => ({
+              title: sec.title,
+              items: sec.items.map((raw) => {
+                const it = entryOf(raw);
+                return { name: it.name, qty: it.qty || undefined, note: it.note || undefined };
+              }),
+            })),
+          });
         break;
       case 'insight':
       case 'swap':

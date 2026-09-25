@@ -36,7 +36,9 @@ Chiara, tipografica e silenziosa, a metà tra ElevenLabs e ChatGPT: la conversaz
 - **Memoria**: Nouri ricorda i cibi che ami (*"adoro il salmone"*), quelli che non ti piacciono (*"odio i funghi"*) e le abitudini (*"ricordati che a pranzo mangio in mensa"*). Li usa in idee, ricette e piani pasti. Si gestisce, e si spegne, da **Memoria** nel menu laterale.
 - **Scorciatoie**: salva un pasto con il segnalibro sulla sua card, oppure scrivendo *"salvalo come colazione solita"*. Poi basta scrivere *"la solita colazione"*, o toccarla dal **+** o dal saluto iniziale, e finisce subito nel diario (con *Annulla* se serve). Funzionano anche con Claude, senza chiamate di rete.
 - **Ricerca rapida dei valori nutrizionali**: la lente nell'header apre una ricerca istantanea. Gli alimenti comuni arrivano subito dalla tabella interna, anche offline; i prodotti confezionati arrivano da [Open Food Facts](https://world.openfoodfacts.org) per nome o per codice a barre. Su iOS e Android c'è lo scanner (`expo-camera`), sul web si possono scrivere le cifre. Scegli la porzione e aggiungi al diario con un tocco.
-- **Piano pasti giornaliero o settimanale**: *"fammi un piano pasti per la settimana"* in chat, oppure **Piano pasti** dal menu. Colazione, pranzo, spuntino e cena calibrati su calorie e macro, senza i cibi che eviti e con più spesso quelli che ami. Stili: bilanciato, più proteine, veloce, leggero. Per ogni piatto puoi segnarlo come mangiato, cambiarlo o aprire la ricetta; la lista della spesa del piano è divisa per reparto. Il piano di oggi compare anche in **Oggi** e nel brief del mattino.
+- **Piano pasti giornaliero o settimanale**: *"fammi un piano pasti"* in chat, oppure **Piano pasti** dal menu. Di default è la settimana; durata e stile predefiniti si scelgono da **Piano pasti** o da **Memoria**. Colazione, pranzo, spuntino e cena calibrati su calorie e macro, senza i cibi che eviti e con più spesso quelli che ami. Per ogni piatto puoi segnarlo come mangiato, cambiarlo o aprire la ricetta. Il piano di oggi compare anche in **Oggi** e nel brief del mattino.
+- **Il piano resta in memoria**: Nouri sa cosa prevede ogni giorno (*"cosa mangio stasera?"*, *"cosa c'è giovedì a pranzo?"*) e ricorda cosa è già fatto. Se chiedi di nuovo un piano e ce l'hai già, ti mostra quello (lo rifà solo con *"rifai il piano"*). Cambiando piano, i pasti già mangiati restano e la spesa già presa resta spuntata. I piani sostituiti finiscono tra i **piani salvati**, da riusare (*"riusa il piano precedente"*). Un piatto del piano registrato da qualsiasi punto (per esempio dalla sua ricetta) viene spuntato da solo.
+- **Lista della spesa con le quantità**: gli ingredienti delle ricette sono sommati su tutti i giorni rimasti e moltiplicati per le porzioni del piano (*"Salmone · 300 g · 2 pasti · lun, gio"*), divisi per reparto; spezie e condimenti vanno in *Da controllare in dispensa*. Le spunte sono condivise tra chat e piano e si azzerano con un tocco.
 - **Piano modificabile parlando**: *"voglio mettere massa"*, *"sono diventato vegano"*, *"ora peso 68 kg"*, *"sono intollerante al lattosio"*, *"voglio più proteine"*. Nouri ricalcola i target e mostra cosa è cambiato.
 - **Brief del mattino**: al primo accesso di un nuovo giorno Nouri scrive per primo, con il resoconto di ieri, una nota e le idee per il prossimo pasto.
 - **Foto del piatto**: scatta o carica una foto e Nouri riconosce ingredienti e porzioni.
@@ -105,7 +107,8 @@ components/widgets/  le card generative
 components/food/     scheda alimento, tabella nutrizionale, scanner del codice a barre
 lib/ai/              askNouri() → Claude o motore offline (scorciatoie sempre istantanee)
 lib/memory.ts        memoria: gusti, abitudini e scorciatoie
-lib/mealplan.ts      generatore dei piani pasti e lista della spesa
+lib/mealplan.ts      generatore dei piani pasti, riuso dei piani salvati
+lib/grocery.ts       lista della spesa: ingredienti sommati con le quantità, per reparto
 lib/foodfacts.ts     valori nutrizionali della tabella interna
 lib/foodsearch.ts    Open Food Facts: ricerca per nome e codice a barre
 lib/store.ts         stato persistito (zustand + AsyncStorage)

@@ -124,6 +124,16 @@ export interface FoodFacts {
   portion: { label: string; grams: number };
 }
 
+// ——— shopping ———
+
+export interface GroceryItem {
+  name: string;
+  /** "300 g", "4", "2 fette", "q.b." */
+  qty?: string;
+  /** Where it's used: "3 pasti · lun, mer, ven". */
+  note?: string;
+}
+
 // ——— meal plan ———
 
 export type PlanFocus = 'balanced' | 'protein' | 'quick' | 'light';
@@ -167,7 +177,13 @@ export type Widget =
   | { type: 'ideas'; ideas: Idea[] }
   | { type: 'insight'; tone: 'positive' | 'neutral' | 'warning'; title: string; body: string }
   | { type: 'water' }
-  | { type: 'grocery'; sections: { title: string; items: string[] }[] }
+  | {
+      type: 'grocery';
+      /** Plain strings in older chats; items with quantities since. */
+      sections: { title: string; items: (string | GroceryItem)[] }[];
+      /** Set for a plan's list: ticks are shared with the Piano pasti screen. */
+      planId?: string;
+    }
   | { type: 'week' }
   | { type: 'swap'; from: SwapFood; to: SwapFood; reason: string }
   | { type: 'targets'; before: Targets; after: Targets; changes: string[] }

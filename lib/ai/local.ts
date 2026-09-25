@@ -4,6 +4,7 @@
  * with no API key and makes a great fallback when the network is down.
  */
 import { fromFoodEntry, nutrientsFor } from '../foodfacts';
+import { boughtKey, groceryFor } from '../grocery';
 import { capitalize, findFood, normalize, parseFoods, type FoodEntry } from '../foods';
 import {
   dayFromText,
@@ -11,6 +12,7 @@ import {
   generatePlan,
   planDayTotals,
   planGrocery,
+  planMealKey,
   planTitle,
   recipeForMeal,
   recipePool,
@@ -79,6 +81,16 @@ export function quickRespond(input: UserInput, ctx: BrainContext): BrainReply | 
   if (name) return toReply(shortcutSaveTurn(name, ctx));
   const t = normalize(input.text);
   if (REUSE_RE.test(t)) return toReply(reusePlanTurn(ctx));
+  // the plan in memory: never made twice, and asked about without a round trip
+  const req = parsePlanRequest(t, ctx);
+  if (req && !req.fresh) {
+    const existing = existingPlanTurn(req, ctx);
+    if (existing) return toReply(existing);
+  }
+  const planned = plannedFor(t, ctx);
+  if (planned) return toReply(planned);
+  if (activePlan(ctx) && /(spesa|lista)/.test(t) && /(piano|menu|settiman)/.test(t))
+    return toReply(groceryTurn(ctx, t));
   if (/\b(non|domani|ieri|salto|saltare|senza|quanto|quante)\b/.test(t) || input.text.includes('?'))
     return null;
   const sc = matchShortcut(input.text, ctx.shortcuts);
@@ -676,12 +688,19 @@ function groceryTurn(ctx: BrainContext, t: string): Turn {
     .slice(-6)
     .some((m) => m.widgets?.some((w) => w.type === 'recipe'));
   if (plan && (/(piano|menu|settiman)/.test(t) || !recentRecipe)) {
-    const sections = planGrocery(plan);
-    const count = sections.reduce((a, s) => a + s.items.length, 0);
+    const today = dayKey();
+    const sections = planGrocery(plan, today);
+    const names = sections.flatMap((s) => s.items.map((i) => i.name));
+    const bought = names.filter((n) => ctx.checked[boughtKey(`plan:${plan.id}`, n)]).length;
+    const ahead = plan.days.filter((d) => d.date >= today);
+    const span =
+      ahead.length > 1
+        ? `da ${dayName(ahead[0].date).toLowerCase()} a ${dayName(ahead[ahead.length - 1].date).toLowerCase()}`
+        : dayName(ahead[0]?.date ?? today).toLowerCase();
     return {
-      text: `Ecco la spesa per il tuo piano ${plan.kind === 'week' ? 'della settimana' : 'di oggi'}: **${count} cose**, divise per reparto. Spunta man mano che riempi il carrello.`,
-      widgets: [{ type: 'grocery', sections }],
-      suggestions: ['Com’è andata oggi?', 'Piano di oggi', 'Idee per uno spuntino'],
+      text: `Ecco la spesa per il tuo piano, ${span}: **${names.length} voci** con le quantità già sommate per tutti i pasti e le porzioni.${bought ? ` Ne hai già presi **${bought}**: restano spuntati.` : ' Spunta man mano che riempi il carrello: me lo ricordo.'}`,
+      widgets: [{ type: 'grocery', sections, planId: plan.id }],
+      suggestions: ['Cosa mangio stasera?', 'Piano di oggi', 'Idee per uno spuntino'],
     };
   }
   const lastRecipe = [...ctx.history]
@@ -693,21 +712,15 @@ function groceryTurn(ctx: BrainContext, t: string): Turn {
     ...(base ? [base] : []),
     ...pickRecipes(ctx, 'Cena', { protein: true }).filter((r) => r !== base),
   ].slice(0, 3);
-  const aisles: Record<string, string[]> = {};
-  picks.forEach((r) =>
-    Object.entries(r.aisles).forEach(([aisle, items]) => {
-      aisles[aisle] = Array.from(new Set([...(aisles[aisle] ?? []), ...items]));
-    })
-  );
   return {
-    text: `Ho messo insieme la spesa per ${picks.length} pasti veloci: ${picks.map((p) => `*${p.title}*`).join(', ')}. Spunta man mano che riempi il carrello.`,
+    text: `Ho messo insieme la spesa per ${picks.length} pasti veloci, con le dosi per una persona: ${picks.map((p) => `*${p.title}*`).join(', ')}. Spunta man mano che riempi il carrello.`,
     widgets: [
       {
         type: 'grocery',
-        sections: Object.entries(aisles).map(([title, items]) => ({ title, items })),
+        sections: groceryFor(picks.map((r) => ({ title: r.title, servings: 1 }))),
       },
     ],
-    suggestions: [`Ricetta: ${picks[0].title}`, 'Idee per colazione', 'Com’è andata oggi?'],
+    suggestions: [`Ricetta: ${picks[0].title}`, 'Fammi un piano pasti', 'Com’è andata oggi?'],
   };
 }
 
@@ -969,7 +982,7 @@ function parsePlanRequest(t: string, ctx: BrainContext): PlanRequest | null {
       !activePlan(ctx)?.days.some((d) => d.date === dayFromText('domani')));
   const followUp =
     Boolean(ctx.plan) &&
-    /((rifai|rigenera|cambia|un altro|nuovo) (il |un )?(piano|menu)|(piano|menu) (piu|con piu) (proteic|proteine|veloce|leggero)|piu (proteine|veloce|leggero) nel (piano|menu))/.test(
+    /((rifai|rigenera|cambia|un altro|nuovo) (il |un )?(piano|menu)|(piano|menu) (piu|con piu) (proteic|proteine|veloce|leggero)|piu (proteine|proteico|veloce|leggero) nel (piano|menu))/.test(
       t
     );
   if (!explicit && !followUp) return null;
@@ -983,7 +996,7 @@ function parsePlanRequest(t: string, ctx: BrainContext): PlanRequest | null {
       : followUp && ctx.plan
         ? ctx.plan.kind
         : ctx.planPrefs.kind;
-  const focus: PlanFocus = /(protein|massa)/.test(t)
+  const focus: PlanFocus = /(protei|massa)/.test(t)
     ? 'protein'
     : /(veloc|rapid|poco tempo)/.test(t)
       ? 'quick'
@@ -992,15 +1005,16 @@ function parsePlanRequest(t: string, ctx: BrainContext): PlanRequest | null {
         : followUp && ctx.plan
           ? ctx.plan.focus
           : ctx.planPrefs.focus;
+  const focusSaid = /(protei|massa|veloc|rapid|poco tempo|legger|dimagr|light)/.test(t);
   return {
     kind,
     focus,
     tomorrow: kind === 'day' && /domani/.test(t),
+    // only an explicit "redo" (or a different style) replaces a plan already made
     fresh:
       followUp ||
-      /(nuovo|rifai|rigenera|crea|fammi|fai|genera|prepara|organizza|pianifica|programma|un altro|diverso|voglio|vorrei|mi serve|dammi|solo)/.test(
-        t
-      ),
+      /(nuovo|nuova|rifai|rigenera|ricrea|un altro|un altra|diverso|cambia|da capo|solo)/.test(t) ||
+      (focusSaid && Boolean(ctx.plan) && focus !== ctx.plan?.focus),
   };
 }
 
@@ -1089,31 +1103,49 @@ function plannedFor(t: string, ctx: BrainContext): Turn | null {
   };
 }
 
-function mealPlanTurn(req: PlanRequest, ctx: BrainContext): Turn {
+/** A plan already made that covers the request: shown again instead of making a new one. */
+function existingPlanTurn(req: PlanRequest, ctx: BrainContext): Turn | null {
+  const current = activePlan(ctx);
+  if (!current) return null;
   const target = new Date();
   if (req.tomorrow) target.setDate(target.getDate() + 1);
   const key = dayKey(target);
-  const current = activePlan(ctx);
+  const ahead = current.days.filter((d) => d.date >= dayKey());
+  const eaten = (days: typeof current.days) =>
+    days.reduce(
+      (a, d) =>
+        a + d.meals.filter((_, i) => ctx.planLog[planMealKey(current.id, d.date, i)]).length,
+      0
+    );
 
-  // "Piano di oggi" with a plan already in place: show it instead of making a new one.
-  if (!req.fresh && current) {
+  if (req.kind === 'day') {
     const day = current.days.find((d) => d.date === key);
-    if (req.kind === 'day' && day) {
-      const tot = planDayTotals(day);
-      return {
-        text: `${dayName(key)} dal tuo piano: **${formatKcal(tot.kcal)} kcal** e **${Math.round(tot.protein)} g di proteine**. Tocca un piatto per la ricetta.`,
-        widgets: [{ type: 'meal_plan', plan: { ...current, kind: 'day', days: [day] } }],
-        suggestions: ['Lista della spesa del piano', 'Rifai il piano', 'Com’è andata oggi?'],
-      };
-    }
-    if (req.kind === 'week' && current.kind === 'week') {
-      return {
-        text: 'Ecco la tua settimana. Scegli un giorno per vedere i pasti, o tocca un piatto per la ricetta.',
-        widgets: [{ type: 'meal_plan', plan: current }],
-        suggestions: ['Lista della spesa del piano', 'Rifai il piano', 'Piano di oggi'],
-      };
-    }
+    if (!day) return null;
+    const tot = planDayTotals(day);
+    const done = eaten([day]);
+    return {
+      text: `${dayName(key)} hai già il tuo piano: **${formatKcal(tot.kcal)} kcal** e **${Math.round(tot.protein)} g di proteine**${done ? `, ${done} ${done === 1 ? 'pasto già segnato' : 'pasti già segnati'}` : ''}. Eccolo, tocca un piatto per la ricetta.`,
+      widgets: [{ type: 'meal_plan', plan: { ...current, kind: 'day', days: [day] } }],
+      suggestions: ['Lista della spesa del piano', 'Rifai il piano', 'Com’è andata oggi?'],
+    };
   }
+  // a week is "already made" while most of it is still ahead
+  if (current.kind !== 'week' || ahead.length < 4) return null;
+  const done = eaten(ahead);
+  const last = ahead[ahead.length - 1].date;
+  return {
+    text: `Il piano di questa settimana l’hai già: va avanti fino a ${dayName(last).toLowerCase()}${done ? ` e hai già segnato ${done} ${done === 1 ? 'pasto' : 'pasti'}` : ''}. Eccolo. Se lo vuoi diverso, dimmi *«rifai il piano»*.`,
+    widgets: [{ type: 'meal_plan', plan: current }],
+    suggestions: ['Cosa mangio stasera?', 'Lista della spesa del piano', 'Rifai il piano'],
+  };
+}
+
+function mealPlanTurn(req: PlanRequest, ctx: BrainContext): Turn {
+  const existing = req.fresh ? null : existingPlanTurn(req, ctx);
+  if (existing) return existing;
+
+  const target = new Date();
+  if (req.tomorrow) target.setDate(target.getDate() + 1);
 
   const plan = generatePlan({
     profile: ctx.profile,

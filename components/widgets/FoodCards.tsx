@@ -9,7 +9,8 @@ import { colors, radii } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
 import { formatKcal, labelForTime } from '@/lib/nutrition';
 import { useNouri } from '@/lib/store';
-import type { Idea, Recipe, SwapFood } from '@/lib/types';
+import { boughtKey, entryOf } from '@/lib/grocery';
+import type { GroceryItem, Idea, Recipe, SwapFood } from '@/lib/types';
 
 function EmojiTile({ emoji, size = 40 }: { emoji: string; size?: number }) {
   return (
@@ -258,13 +259,18 @@ export function SwapCard({ from, to, reason }: { from: SwapFood; to: SwapFood; r
 export function GroceryCard({
   sections,
   widgetKey,
+  planId,
 }: {
-  sections: { title: string; items: string[] }[];
+  sections: { title: string; items: (string | GroceryItem)[] }[];
   widgetKey: string;
+  planId?: string;
 }) {
   const checked = useNouri((s) => s.checked);
   const toggle = useNouri((s) => s.toggleChecked);
-  const all = sections.flatMap((s) => s.items.map((it) => `${widgetKey}:${s.title}:${it}`));
+  const clear = useNouri((s) => s.clearChecked);
+  // a plan's list shares its ticks everywhere it appears, and keeps them when the plan changes
+  const scope = planId ? `plan:${planId}` : widgetKey;
+  const all = sections.flatMap((s) => s.items.map((it) => boughtKey(scope, entryOf(it).name)));
   const done = all.filter((k) => checked[k]).length;
   return (
     <Card style={{ padding: 16 }}>
@@ -272,21 +278,36 @@ export function GroceryCard({
         <Sans size={15} weight="semi">
           Lista della spesa
         </Sans>
-        <Mono size={12} color={done === all.length ? colors.positive : colors.faint}>
-          {done}/{all.length}
-        </Mono>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          {done > 0 && (
+            <Pressable
+              hitSlop={8}
+              onPress={() => {
+                haptic.tap();
+                clear(`${scope}:`);
+              }}>
+              <Sans size={12} weight="medium" color={colors.dim}>
+                Azzera
+              </Sans>
+            </Pressable>
+          )}
+          <Mono size={12} color={done === all.length ? colors.positive : colors.faint}>
+            {done}/{all.length} presi
+          </Mono>
+        </View>
       </View>
       {sections.map((sec) => (
         <View key={sec.title} style={{ marginTop: 14 }}>
           <Sans size={12} weight="medium" color={colors.faint} style={{ marginBottom: 2 }}>
             {sec.title}
           </Sans>
-          {sec.items.map((it) => {
-            const key = `${widgetKey}:${sec.title}:${it}`;
+          {sec.items.map((raw) => {
+            const it = entryOf(raw);
+            const key = boughtKey(scope, it.name);
             const on = Boolean(checked[key]);
             return (
               <Pressable
-                key={key}
+                key={`${sec.title}:${key}`}
                 onPress={() => {
                   haptic.select();
                   toggle(key);
@@ -299,12 +320,27 @@ export function GroceryCard({
                   ]}>
                   {on && <Icon name="check-linear" size={13} color={colors.onAccent} />}
                 </View>
-                <Sans
-                  size={14}
-                  color={on ? colors.faint : colors.ink}
-                  style={on ? { textDecorationLine: 'line-through' } : undefined}>
-                  {it}
-                </Sans>
+                <View style={{ flex: 1 }}>
+                  <Sans
+                    size={14}
+                    color={on ? colors.faint : colors.ink}
+                    style={on ? { textDecorationLine: 'line-through' } : undefined}>
+                    {it.name}
+                  </Sans>
+                  {it.note ? (
+                    <Sans size={12} color={colors.faint}>
+                      {it.note}
+                    </Sans>
+                  ) : null}
+                </View>
+                {it.qty ? (
+                  <Mono
+                    size={13}
+                    weight={it.qty === 'q.b.' ? 'regular' : 'medium'}
+                    color={on || it.qty === 'q.b.' ? colors.faint : colors.ink}>
+                    {it.qty}
+                  </Mono>
+                ) : null}
               </Pressable>
             );
           })}
@@ -354,7 +390,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   swapSide: { flex: 1, gap: 6 },
-  groceryRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7 },
+  groceryRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
   checkbox: {
     width: 18,
     height: 18,

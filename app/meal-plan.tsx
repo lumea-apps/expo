@@ -14,6 +14,7 @@ import { Toast, useToast } from '@/components/ui/Toast';
 import { Display, Mono, Sans } from '@/components/ui/Typography';
 import { GroceryCard } from '@/components/widgets/FoodCards';
 import { colors, radii } from '@/constants/theme';
+import { boughtKey } from '@/lib/grocery';
 import { haptic } from '@/lib/haptics';
 import {
   dayChip,
@@ -53,6 +54,7 @@ function PlanContent() {
   const toast = useToast();
   const plan = useNouri((s) => s.plan);
   const planLog = useNouri((s) => s.planLog);
+  const checked = useNouri((s) => s.checked);
   const profile = useNouri((s) => s.profile);
   const memories = useNouri((s) => s.memories);
   const memoryOn = useNouri((s) => s.memoryOn);
@@ -260,7 +262,11 @@ function PlanContent() {
           : `Per ${dayName(p.days[0].date).toLowerCase()}`,
       render: () => (
         <ScrollView style={{ maxHeight: 520 }} showsVerticalScrollIndicator={false}>
-          <GroceryCard sections={planGrocery(p)} widgetKey={`plan:${p.id}`} />
+          <GroceryCard
+            sections={planGrocery(p, dayKey())}
+            widgetKey={`plan:${p.id}`}
+            planId={p.id}
+          />
         </ScrollView>
       ),
     });
@@ -330,6 +336,14 @@ function PlanContent() {
               icon="cart-large-2-bold-duotone"
               tint="mint"
               label="Lista della spesa"
+              hint="Quantità sommate per tutti i giorni rimasti"
+              value={(() => {
+                const names = planGrocery(current, today).flatMap((sec) =>
+                  sec.items.map((i) => i.name)
+                );
+                const got = names.filter((n) => checked[boughtKey(`plan:${current.id}`, n)]).length;
+                return got ? `${got}/${names.length} presi` : `${names.length} voci`;
+              })()}
               chevron
               onPress={() => openGrocery(current)}
             />

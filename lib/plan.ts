@@ -37,14 +37,15 @@ export function createMealPlan(opts: {
   if (!s.profile) return null;
   const start = new Date();
   if (opts.tomorrow) start.setDate(start.getDate() + 1);
-  const plan = generatePlan({
-    profile: s.profile,
-    memories: s.memoryOn ? s.memories : [],
-    kind: opts.kind,
-    focus: opts.focus,
-    start,
-  });
-  s.setPlan(plan);
+  const plan = s.activatePlan(
+    generatePlan({
+      profile: s.profile,
+      memories: s.memoryOn ? s.memories : [],
+      kind: opts.kind,
+      focus: opts.focus,
+      start,
+    })
+  );
   s.pushMessage(
     {
       role: 'assistant',
@@ -61,8 +62,7 @@ export function createMealPlan(opts: {
 /** Puts a saved plan back in use, from today, with the same dishes. */
 export function reuseMealPlan(past: MealPlan): MealPlan {
   const s = useNouri.getState();
-  const plan = redatePlan(past);
-  s.setPlan(plan);
+  const plan = s.activatePlan(redatePlan(past));
   s.pushMessage(
     {
       role: 'assistant',

@@ -58,6 +58,8 @@ interface NouriState {
   settle: (id: string) => void;
   setThinking: (v: boolean) => void;
   toggleChecked: (key: string) => void;
+  /** Unticks every key starting with `prefix` (a whole shopping list). */
+  clearChecked: (prefix: string) => void;
   setSpeakReplies: (v: boolean) => void;
   markBrief: (day: string) => void;
   setMemoryOn: (v: boolean) => void;
@@ -69,6 +71,11 @@ interface NouriState {
   countShortcutUse: (id: string) => void;
   /** Makes `plan` active; the plan it replaces is kept in `pastPlans`. */
   setPlan: (plan: MealPlan | null) => void;
+  /**
+   * Makes a new plan active, remembering what was already done: meals already
+   * eaten on the same days are kept, items already bought stay ticked.
+   */
+  activatePlan: (plan: MealPlan) => MealPlan;
   removePastPlan: (id: string) => void;
   setPlanPrefs: (p: Partial<PlanPrefs>) => void;
   markPlanMeal: (key: string, mealId: string) => void;
@@ -159,6 +166,13 @@ export const useNouri = create<NouriState>()(
 
       toggleChecked: (key) => set((s) => ({ checked: { ...s.checked, [key]: !s.checked[key] } })),
 
+      clearChecked: (prefix) =>
+        set((s) => ({
+          checked: Object.fromEntries(
+            Object.entries(s.checked).filter(([k]) => !k.startsWith(prefix))
+          ),
+        })),
+
       setSpeakReplies: (speakReplies) => set({ speakReplies }),
 
       markBrief: (lastBrief) => set({ lastBrief }),
@@ -241,6 +255,46 @@ export const useNouri = create<NouriState>()(
               .slice(0, 8),
           };
         }),
+
+      activatePlan: (plan) => {
+        const s = get();
+        const old = s.plan;
+        if (!old || old.id === plan.id) {
+          s.setPlan(plan);
+          return plan;
+        }
+        const planLog = { ...s.planLog };
+        const next: MealPlan = {
+          ...plan,
+          days: plan.days.map((d) => {
+            const od = old.days.find((x) => x.date === d.date);
+            if (!od) return d;
+            return {
+              ...d,
+              meals: d.meals.map((m, i) => {
+                const j = od.meals.findIndex(
+                  (om, k) => om.label === m.label && planLog[planMealKey(old.id, od.date, k)]
+                );
+                if (j === -1) return m;
+                planLog[planMealKey(plan.id, d.date, i)] = planLog[planMealKey(old.id, od.date, j)];
+                return od.meals[j];
+              }),
+            };
+          }),
+        };
+        // still the same stretch of days: what was bought stays bought
+        let checked = s.checked;
+        if (old.days.some((d) => d.date >= dayKey())) {
+          const from = `plan:${old.id}:`;
+          checked = { ...s.checked };
+          for (const [k, v] of Object.entries(s.checked)) {
+            if (v && k.startsWith(from)) checked[`plan:${plan.id}:${k.slice(from.length)}`] = true;
+          }
+        }
+        set({ planLog, checked });
+        get().setPlan(next);
+        return next;
+      },
 
       removePastPlan: (id) => set((s) => ({ pastPlans: s.pastPlans.filter((p) => p.id !== id) })),
 

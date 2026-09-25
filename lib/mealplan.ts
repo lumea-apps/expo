@@ -261,49 +261,7 @@ export function recipeForMeal(title: string): RecipeEntry | undefined {
   return RECIPES.find((r) => r.title === title) ?? findRecipe(title);
 }
 
-const AISLE_ORDER = [
-  'Ortofrutta',
-  'Macelleria',
-  'Pescheria',
-  'Salumeria',
-  'Frigo',
-  'Panetteria',
-  'Dispensa',
-  'Surgelati',
-];
-
-/** Shopping list for a plan, grouped by aisle (recipes Nouri doesn't know go under "Altro"). */
-export function planGrocery(plan: MealPlan): { title: string; items: string[] }[] {
-  const aisles: Record<string, Set<string>> = {};
-  const other = new Set<string>();
-  const seen = new Set<string>();
-  for (const day of plan.days) {
-    for (const m of day.meals) {
-      const r = RECIPES.find((x) => x.title === m.title);
-      if (!r) {
-        other.add(m.title);
-        continue;
-      }
-      for (const [aisle, items] of Object.entries(r.aisles)) {
-        aisles[aisle] ??= new Set();
-        for (const raw of items) {
-          const it = raw.replace(/\s+\d+\s*g$/, '');
-          // "Zucchina" and "Zucchine" are the same thing on a shopping list
-          const key = normalize(it).replace(/[aeio]\b/g, '');
-          if (!seen.has(key)) {
-            seen.add(key);
-            aisles[aisle].add(it);
-          }
-        }
-      }
-    }
-  }
-  const sections = Object.entries(aisles)
-    .sort(([a], [b]) => (AISLE_ORDER.indexOf(a) + 1 || 99) - (AISLE_ORDER.indexOf(b) + 1 || 99))
-    .map(([title, items]) => ({ title, items: [...items] }));
-  if (other.size) sections.push({ title: 'Per gli altri piatti', items: [...other] });
-  return sections;
-}
+export { planGrocery } from './grocery';
 
 export function planDayTotals(day: PlanDay): Macros {
   return roundMacros(sumMacros(day.meals));
@@ -393,12 +351,20 @@ export function dayFromText(t: string, now: Date = new Date()): string | null {
   return dayKey(d);
 }
 
-/** Compact text of a plan for Claude's context. */
-export function planContext(plan: MealPlan): string {
+/** Compact text of a plan for Claude's context; eaten meals are marked. */
+export function planContext(
+  plan: MealPlan,
+  eaten: (date: string, index: number) => boolean = () => false
+): string {
   return plan.days
     .map(
       (d) =>
-        `${dayName(d.date)}: ${d.meals.map((m) => `${m.label} ${m.title} (${m.kcal} kcal)`).join('; ')}`
+        `${dayName(d.date)}: ${d.meals
+          .map(
+            (m, i) =>
+              `${m.label} ${m.title} (${m.kcal} kcal)${eaten(d.date, i) ? ' ✓ già mangiato' : ''}`
+          )
+          .join('; ')}`
     )
     .join('\n');
 }

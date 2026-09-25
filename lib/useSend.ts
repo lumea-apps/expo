@@ -39,6 +39,8 @@ export function brainContext(history = useNouri.getState().messages): BrainConte
     plan: s.plan,
     pastPlans: s.pastPlans,
     planPrefs: s.planPrefs,
+    planLog: s.planLog,
+    checked: s.checked,
   };
 }
 
@@ -81,11 +83,11 @@ export function useSend() {
         const remembered = applyMemory(reply.memory);
         if (remembered.length) widgets.push({ type: 'memory', changes: remembered });
         // a new meal plan becomes the active one
-        const newPlan = widgets.find(
-          (w): w is Extract<Widget, { type: 'meal_plan' }> => w.type === 'meal_plan'
-        );
-        if (newPlan && newPlan.plan.id !== useNouri.getState().plan?.id) {
-          useNouri.getState().setPlan(newPlan.plan);
+        const pi = widgets.findIndex((w) => w.type === 'meal_plan');
+        const newPlan = widgets[pi];
+        if (newPlan?.type === 'meal_plan' && newPlan.plan.id !== useNouri.getState().plan?.id) {
+          // keeps meals already eaten, so the card shows the plan as it really is
+          widgets[pi] = { type: 'meal_plan', plan: useNouri.getState().activatePlan(newPlan.plan) };
         }
         const current = useNouri.getState().profile;
         if (reply.profilePatch && current) {

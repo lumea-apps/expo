@@ -32,7 +32,7 @@ The whole product is a conversation; data screens are secondary. See `README.md`
 - `app/voice.tsx` - Voice mode (Web Speech API on web, keyboard dictation on native, TTS via `expo-speech`)
 - `app/search.tsx` - Quick nutrition search: built-in foods instantly, Open Food Facts products by name or barcode (`components/food/BarcodeScanner.tsx`, stubbed on web)
 - `app/memory.tsx` - Memory: on/off switch, shortcuts, liked/disliked foods, habits
-- `app/meal-plan.tsx` - Daily or weekly meal plan: create (day/tomorrow/week × focus), mark eaten, swap a dish, grocery list
+- `app/meal-plan.tsx` - Daily or weekly meal plan: create (day/tomorrow/week × focus, defaults from `planPrefs`), mark eaten, swap a dish, grocery list, saved plans (reuse)
 - `app/_layout.tsx` - Root layout (Geist fonts, light theme, splash, stack/modals)
 
 Key modules:
@@ -42,7 +42,9 @@ Key modules:
 - `lib/store.ts` - Zustand store persisted with AsyncStorage (profile, meals, water, chat).
 - `lib/foods.ts`, `lib/recipes.ts` - Food table + recipe catalogue used by the offline brain and the meal planner.
 - `lib/memory.ts` - Parses memory requests ("odio i funghi", "salvalo come colazione solita"), matches shortcuts, and checks dishes against likes/dislikes. Memory is only passed to the brains when `memoryOn` is true; shortcuts always work.
-- `lib/mealplan.ts` - `generatePlan()` (4 slots/day sized to targets, diet/avoid/dislikes respected, variety across the week), `swapPlannedMeal()`, `planGrocery()`.
+- `lib/mealplan.ts` - `generatePlan()` (4 slots/day sized to targets, diet/avoid/dislikes respected, variety across the week), `swapPlannedMeal()`, `redatePlan()`, `dayFromText()`, `planContext()`.
+- `lib/grocery.ts` - Shopping lists with quantities: parses recipe ingredients, scales by servings, sums across the plan, groups by aisle. Ticks are stored in `checked` under `boughtKey('plan:<id>', name)` so the chat card and the plan screen share them.
+- Plan memory lives in the store: `plan` (active), `pastPlans`, `planPrefs` (default week/balanced), `planLog` (eaten). Always switch plans with `activatePlan()`: it keeps meals already eaten on the same days and carries bought ticks over; `setPlan()` alone is for edits of the same plan (swap). The local `quickRespond()` shows an existing plan instead of making a new one unless the user says "rifai"/"nuovo".
 - `lib/foodfacts.ts` (pure) and `lib/foodsearch.ts` (Open Food Facts; native uses search.openfoodfacts.org, web uses the CORS-enabled `cgi/search.pl`).
 - `constants/theme.ts` - Design tokens (colors per macro, fonts, radii). Use these instead of hard-coded values.
 - `components/ui/` - Orb, Glass/Card/Chip/buttons, rings, typography (`Display`/`Sans`/`Mono`, all Geist; `Mono` = tabular figures).

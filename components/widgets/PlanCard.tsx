@@ -19,7 +19,7 @@ export function MealPlanCard({ plan, onSend }: { plan: MealPlan; onSend: (text: 
   const active = useNouri((s) => s.plan);
   const planLog = useNouri((s) => s.planLog);
   const target = useNouri((s) => s.profile?.targets.kcal ?? 2000);
-  const setPlan = useNouri((s) => s.setPlan);
+  const activatePlan = useNouri((s) => s.activatePlan);
   const today = dayKey();
   const [sel, setSel] = useState(() =>
     Math.max(
@@ -159,7 +159,7 @@ export function MealPlanCard({ plan, onSend }: { plan: MealPlan; onSend: (text: 
             variant="outline"
             style={{ flex: 1, height: 44 }}
             onPress={() => {
-              setPlan(plan);
+              activatePlan(plan);
               haptic.success();
             }}
           />

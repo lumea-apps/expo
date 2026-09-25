@@ -4,7 +4,8 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Icon, IconTile, type IconName } from '@/components/ui/Icon';
+import { FOCUS_ICONS, kindLabel, PlanPrefsEditor } from '@/components/plan/PlanPrefsEditor';
+import { Icon, IconTile } from '@/components/ui/Icon';
 import { MacroBar } from '@/components/ui/MacroRing';
 import { MenuGroup, MenuRow } from '@/components/ui/Menu';
 import { SheetProvider, useSheet } from '@/components/ui/Sheet';
@@ -12,7 +13,7 @@ import { Card, IconButton, PrimaryButton } from '@/components/ui/Surface';
 import { Toast, useToast } from '@/components/ui/Toast';
 import { Display, Mono, Sans } from '@/components/ui/Typography';
 import { GroceryCard } from '@/components/widgets/FoodCards';
-import { colors, radii, type Tint } from '@/constants/theme';
+import { colors, radii } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
 import {
   dayChip,
@@ -29,17 +30,10 @@ import {
 } from '@/lib/mealplan';
 import { joinList } from '@/lib/memory';
 import { dayKey, formatKcal } from '@/lib/nutrition';
-import { createMealPlan } from '@/lib/plan';
+import { createMealPlan, reuseMealPlan } from '@/lib/plan';
 import { useNouri } from '@/lib/store';
 import type { MealPlan, PlanFocus, PlannedMeal } from '@/lib/types';
 import { useSend } from '@/lib/useSend';
-
-const FOCUS_ICONS: Record<PlanFocus, { icon: IconName; tint: Tint }> = {
-  balanced: { icon: 'target-bold-duotone', tint: 'blue' },
-  protein: { icon: 'dumbbell-large-minimalistic-bold-duotone', tint: 'violet' },
-  quick: { icon: 'stopwatch-bold-duotone', tint: 'amber' },
-  light: { icon: 'leaf-bold-duotone', tint: 'mint' },
-};
 
 type When = 'today' | 'tomorrow' | 'week';
 
@@ -62,6 +56,8 @@ function PlanContent() {
   const profile = useNouri((s) => s.profile);
   const memories = useNouri((s) => s.memories);
   const memoryOn = useNouri((s) => s.memoryOn);
+  const pastPlans = useNouri((s) => s.pastPlans);
+  const prefs = useNouri((s) => s.planPrefs);
   const today = dayKey();
   const current = plan && plan.days.some((d) => d.date >= today) ? plan : null;
 
@@ -92,6 +88,62 @@ function PlanContent() {
       subtitle: 'Sostituisce quello attuale',
       render: (close) => (
         <PlanBuilder onCreate={(when, focus) => close(() => create(when, focus))} compact />
+      ),
+    });
+
+  const openPrefs = () =>
+    sheet.open({
+      title: 'Quando chiedi un piano',
+      subtitle: 'Nouri usa queste scelte se non dici altro',
+      render: () => <PlanPrefsEditor />,
+    });
+
+  const openPast = (p: MealPlan) =>
+    sheet.open({
+      title: planTitle(p),
+      subtitle: `${focusLabels[p.focus]} · ${p.days.length === 1 ? '1 giorno' : `${p.days.length} giorni`} · ${new Set(p.days.flatMap((d) => d.meals.map((m) => m.title))).size} piatti`,
+      render: (close) => (
+        <View style={{ gap: 14 }}>
+          <View style={styles.ingredients}>
+            {p.days[0].meals.map((m, i) => (
+              <View key={`${m.title}${i}`} style={styles.ingredient}>
+                <Sans size={15}>{m.emoji}</Sans>
+                <Sans size={14} style={{ flex: 1 }} numberOfLines={1}>
+                  {m.title}
+                </Sans>
+                <Sans size={12} color={colors.faint}>
+                  {m.label}
+                </Sans>
+              </View>
+            ))}
+            {p.days.length > 1 && (
+              <Sans size={12} color={colors.faint} style={{ marginTop: 4 }}>
+                Primo giorno di {p.days.length}
+              </Sans>
+            )}
+          </View>
+          <MenuGroup>
+            <MenuRow
+              icon="refresh-bold-duotone"
+              tint="violet"
+              label="Riusa da oggi"
+              hint="Stessi piatti, il piano attuale finisce tra i salvati"
+              onPress={() =>
+                close(() => {
+                  reuseMealPlan(p);
+                  haptic.success();
+                  toast.show('Piano rimesso in uso');
+                })
+              }
+            />
+            <MenuRow
+              icon="trash-bin-trash-bold-duotone"
+              label="Elimina dai piani salvati"
+              danger
+              onPress={() => close(() => useNouri.getState().removePastPlan(p.id))}
+            />
+          </MenuGroup>
+        </View>
       ),
     });
 
@@ -313,6 +365,38 @@ function PlanContent() {
             />
           </MenuGroup>
         )}
+
+        <MenuGroup footer="Se chiedi un piano senza dire per quanto, Nouri usa queste scelte.">
+          <MenuRow
+            icon="tuning-bold-duotone"
+            tint="gray"
+            label="Predefinito"
+            value={`${kindLabel(prefs.kind)} · ${focusLabels[prefs.focus]}`}
+            chevron
+            onPress={openPrefs}
+          />
+        </MenuGroup>
+
+        {pastPlans.length > 0 && (
+          <MenuGroup
+            title="Piani salvati"
+            footer="Quando ne crei uno nuovo, il precedente resta qui. Puoi anche dire «riusa il piano precedente».">
+            {pastPlans.map((p) => (
+              <MenuRow
+                key={p.id}
+                icon="calendar-bold-duotone"
+                tint="gray"
+                label={planTitle(p)}
+                hint={`${focusLabels[p.focus]} · ${p.days[0].meals
+                  .map((m) => m.title.split(/,| con | e /)[0].toLowerCase())
+                  .slice(0, 3)
+                  .join(', ')}…`}
+                chevron
+                onPress={() => openPast(p)}
+              />
+            ))}
+          </MenuGroup>
+        )}
       </ScrollView>
       <Toast message={toast.message} bottom={insets.bottom + 24} />
     </View>
@@ -471,8 +555,9 @@ function PlanBuilder({
   onCreate: (when: When, focus: PlanFocus) => void;
   compact?: boolean;
 }) {
-  const [when, setWhen] = useState<When>('week');
-  const [focus, setFocus] = useState<PlanFocus>('balanced');
+  const prefs = useNouri((s) => s.planPrefs);
+  const [when, setWhen] = useState<When>(prefs.kind === 'week' ? 'week' : 'today');
+  const [focus, setFocus] = useState<PlanFocus>(prefs.focus);
   const WHEN: { k: When; l: string }[] = [
     { k: 'today', l: 'Oggi' },
     { k: 'tomorrow', l: 'Domani' },

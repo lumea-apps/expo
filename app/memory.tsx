@@ -4,6 +4,7 @@ import { Platform, ScrollView, StyleSheet, Switch, TextInput, View } from 'react
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ShortcutEditor } from '@/components/memory/ShortcutEditor';
+import { kindLabel, PlanPrefsEditor } from '@/components/plan/PlanPrefsEditor';
 import { Icon, IconTile, type IconName } from '@/components/ui/Icon';
 import { MenuGroup, MenuRow } from '@/components/ui/Menu';
 import { SheetProvider, useSheet, type CloseSheet } from '@/components/ui/Sheet';
@@ -12,7 +13,8 @@ import { Toast, useToast } from '@/components/ui/Toast';
 import { Display, Sans } from '@/components/ui/Typography';
 import { colors, fonts, radii, type Tint } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
-import { formatKcal, formatTime, mealTotals } from '@/lib/nutrition';
+import { focusLabels, planTitle } from '@/lib/mealplan';
+import { dayKey, formatKcal, formatTime, mealTotals } from '@/lib/nutrition';
 import { logShortcut } from '@/lib/shortcuts';
 import { useNouri } from '@/lib/store';
 import type { Meal, MealDraft, MemoryKind, MemoryNote, Shortcut } from '@/lib/types';
@@ -72,6 +74,10 @@ function MemoryContent() {
   const memories = useNouri((s) => s.memories);
   const shortcuts = useNouri((s) => s.shortcuts);
   const meals = useNouri((s) => s.meals);
+  const plan = useNouri((s) => s.plan);
+  const pastPlans = useNouri((s) => s.pastPlans);
+  const planPrefs = useNouri((s) => s.planPrefs);
+  const activePlan = plan && plan.days.some((d) => d.date >= dayKey()) ? plan : null;
 
   const openShortcut = (sc: Shortcut) =>
     sheet.open({
@@ -231,6 +237,42 @@ function MemoryContent() {
               />
             }
           />
+        </MenuGroup>
+
+        <MenuGroup
+          title="Piano pasti"
+          footer="Nouri ricorda il piano giorno per giorno: chiedigli «cosa mangio stasera?» o «cosa c’è giovedì a pranzo?». I piani precedenti restano salvati per riusarli.">
+          <MenuRow
+            icon="calendar-bold-duotone"
+            tint="violet"
+            label="Piano attivo"
+            value={activePlan ? planTitle(activePlan) : 'Nessuno'}
+            chevron
+            onPress={() => router.push('/meal-plan')}
+          />
+          <MenuRow
+            icon="tuning-bold-duotone"
+            tint="gray"
+            label="Predefinito"
+            value={`${kindLabel(planPrefs.kind)} · ${focusLabels[planPrefs.focus]}`}
+            chevron
+            onPress={() =>
+              sheet.open({
+                title: 'Quando chiedi un piano',
+                subtitle: 'Nouri usa queste scelte se non dici altro',
+                render: () => <PlanPrefsEditor />,
+              })
+            }
+          />
+          {pastPlans.length > 0 ? (
+            <MenuRow
+              icon="history-linear"
+              label="Piani salvati"
+              value={String(pastPlans.length)}
+              chevron
+              onPress={() => router.push('/meal-plan')}
+            />
+          ) : null}
         </MenuGroup>
 
         <MenuGroup

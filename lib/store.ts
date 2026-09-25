@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
+import { planMealKey } from './mealplan';
 import { forgets, sameMemory } from './memory';
 import { dayKey, uid } from './nutrition';
 import type {
@@ -13,6 +14,7 @@ import type {
   MemoryChange,
   MemoryKind,
   MemoryNote,
+  PlanPrefs,
   Profile,
   Shortcut,
 } from './types';
@@ -34,6 +36,10 @@ interface NouriState {
   shortcuts: Shortcut[];
   /** The active meal plan (the latest one generated). */
   plan: MealPlan | null;
+  /** Plans replaced by a newer one, newest first: kept so they can be reused. */
+  pastPlans: MealPlan[];
+  /** Default duration and style for new plans (week unless the user picks otherwise). */
+  planPrefs: PlanPrefs;
   /** planMealKey → logged meal id, so a planned meal shows as eaten. */
   planLog: Record<string, string>;
   /** Last foods picked in quick search, newest first. */
@@ -61,7 +67,10 @@ interface NouriState {
   saveShortcut: (name: string, meal: MealDraft) => Shortcut;
   removeShortcut: (id: string) => void;
   countShortcutUse: (id: string) => void;
+  /** Makes `plan` active; the plan it replaces is kept in `pastPlans`. */
   setPlan: (plan: MealPlan | null) => void;
+  removePastPlan: (id: string) => void;
+  setPlanPrefs: (p: Partial<PlanPrefs>) => void;
   markPlanMeal: (key: string, mealId: string) => void;
   pushRecentFood: (f: FoodFacts) => void;
   clearChat: () => void;
@@ -84,6 +93,8 @@ export const useNouri = create<NouriState>()(
       memories: [],
       shortcuts: [],
       plan: null,
+      pastPlans: [],
+      planPrefs: { kind: 'week', focus: 'balanced' },
       planLog: {},
       recentFoods: [],
       hydrated: false,
@@ -94,10 +105,24 @@ export const useNouri = create<NouriState>()(
 
       logMeal: (draft, source, widgetKey, at) => {
         const meal: Meal = { ...draft, id: uid(), at: at ?? new Date().toISOString(), source };
-        set((s) => ({
-          meals: [...s.meals, meal],
-          logged: widgetKey ? { ...s.logged, [widgetKey]: meal.id } : s.logged,
-        }));
+        set((s) => {
+          // eating a dish of today's plan (e.g. from its recipe card) ticks it off the plan
+          const planLog = { ...s.planLog };
+          const today = s.plan?.days.find((d) => d.date === dayKey(meal.at));
+          if (s.plan && today && source !== 'plan') {
+            const i = today.meals.findIndex(
+              (m, idx) =>
+                m.title.toLowerCase() === draft.title.toLowerCase() &&
+                !planLog[planMealKey(s.plan!.id, today.date, idx)]
+            );
+            if (i !== -1) planLog[planMealKey(s.plan.id, today.date, i)] = meal.id;
+          }
+          return {
+            meals: [...s.meals, meal],
+            logged: widgetKey ? { ...s.logged, [widgetKey]: meal.id } : s.logged,
+            planLog,
+          };
+        });
         return meal;
       },
 
@@ -199,7 +224,27 @@ export const useNouri = create<NouriState>()(
           shortcuts: s.shortcuts.map((x) => (x.id === id ? { ...x, uses: x.uses + 1 } : x)),
         })),
 
-      setPlan: (plan) => set({ plan }),
+      setPlan: (plan) =>
+        set((s) => {
+          const old = s.plan;
+          const replaced = Boolean(plan && old && old.id !== plan.id);
+          // the same dishes (a plan reused from history) are not kept twice
+          const dishes = (p: MealPlan) =>
+            p.days.map((d) => d.meals.map((m) => m.title).join('|')).join('/');
+          const same = plan ? dishes(plan) : null;
+          const history = replaced ? [old!, ...s.pastPlans] : s.pastPlans;
+          return {
+            plan,
+            pastPlans: history
+              .filter((p, i, all) => all.findIndex((x) => x.id === p.id) === i)
+              .filter((p) => p.id !== plan?.id && dishes(p) !== same)
+              .slice(0, 8),
+          };
+        }),
+
+      removePastPlan: (id) => set((s) => ({ pastPlans: s.pastPlans.filter((p) => p.id !== id) })),
+
+      setPlanPrefs: (p) => set((s) => ({ planPrefs: { ...s.planPrefs, ...p } })),
 
       markPlanMeal: (key, mealId) => set((s) => ({ planLog: { ...s.planLog, [key]: mealId } })),
 
@@ -263,6 +308,8 @@ export const useNouri = create<NouriState>()(
           memories: [],
           shortcuts: [],
           plan: null,
+          pastPlans: [],
+          planPrefs: { kind: 'week', focus: 'balanced' },
           planLog: {},
           recentFoods: [],
           lastBrief: null,
@@ -290,6 +337,8 @@ export const useNouri = create<NouriState>()(
         memories: s.memories,
         shortcuts: s.shortcuts,
         plan: s.plan,
+        pastPlans: s.pastPlans,
+        planPrefs: s.planPrefs,
         planLog: s.planLog,
         recentFoods: s.recentFoods,
         // keep the chat light: large inline data-URIs (web photos) are dropped

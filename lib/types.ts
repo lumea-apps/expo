@@ -142,6 +142,12 @@ export interface PlanDay {
   meals: PlannedMeal[];
 }
 
+/** How the user likes plans made when they don't say: remembered from the last choice. */
+export interface PlanPrefs {
+  kind: 'day' | 'week';
+  focus: PlanFocus;
+}
+
 export interface MealPlan {
   id: string;
   kind: 'day' | 'week';

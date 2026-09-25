@@ -5,6 +5,7 @@ import type {
   MealPlan,
   MemoryNote,
   MemoryOps,
+  PlanPrefs,
   Profile,
   ProfilePatch,
   Shortcut,
@@ -21,6 +22,10 @@ export interface BrainContext {
   memories: MemoryNote[];
   shortcuts: Shortcut[];
   plan: MealPlan | null;
+  /** Plans replaced by newer ones, newest first (for "riusa il piano precedente"). */
+  pastPlans: MealPlan[];
+  /** Default duration and style when the user asks for a plan without saying. */
+  planPrefs: PlanPrefs;
 }
 
 export interface UserInput {

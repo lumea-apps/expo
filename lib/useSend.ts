@@ -37,6 +37,8 @@ export function brainContext(history = useNouri.getState().messages): BrainConte
     memories: s.memoryOn ? s.memories : [],
     shortcuts: s.shortcuts,
     plan: s.plan,
+    pastPlans: s.pastPlans,
+    planPrefs: s.planPrefs,
   };
 }
 

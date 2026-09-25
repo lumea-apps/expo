@@ -352,3 +352,53 @@ export function planTitle(plan: MealPlan): string {
 /** Key used to remember which planned meals were logged. */
 export const planMealKey = (planId: string, date: string, index: number) =>
   `${planId}:${date}:${index}`;
+
+/** The same dishes again, as a new plan starting on `start` (to reuse a plan you liked). */
+export function redatePlan(plan: MealPlan, start: Date = new Date()): MealPlan {
+  return {
+    ...plan,
+    id: uid(),
+    createdAt: new Date().toISOString(),
+    days: plan.days.map((d, i) => {
+      const date = new Date(start);
+      date.setDate(start.getDate() + i);
+      return { ...d, date: dayKey(date) };
+    }),
+  };
+}
+
+const WEEKDAY_WORDS = [
+  'domenica',
+  'lunedi',
+  'martedi',
+  'mercoledi',
+  'giovedi',
+  'venerdi',
+  'sabato',
+];
+
+/**
+ * The day a (normalized) message refers to: "oggi", "stasera", "domani",
+ * "dopodomani" or a weekday name (the next one, today included).
+ */
+export function dayFromText(t: string, now: Date = new Date()): string | null {
+  const d = new Date(now);
+  if (/\bdopodomani\b/.test(t)) d.setDate(d.getDate() + 2);
+  else if (/\bdomani\b/.test(t)) d.setDate(d.getDate() + 1);
+  else {
+    const w = WEEKDAY_WORDS.findIndex((name) => new RegExp(`\\b${name}\\b`).test(t));
+    if (w !== -1) d.setDate(d.getDate() + ((w - d.getDay() + 7) % 7));
+    else if (!/\b(oggi|stasera|stamattina|stamani)\b/.test(t)) return null;
+  }
+  return dayKey(d);
+}
+
+/** Compact text of a plan for Claude's context. */
+export function planContext(plan: MealPlan): string {
+  return plan.days
+    .map(
+      (d) =>
+        `${dayName(d.date)}: ${d.meals.map((m) => `${m.label} ${m.title} (${m.kcal} kcal)`).join('; ')}`
+    )
+    .join('\n');
+}

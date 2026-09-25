@@ -6,13 +6,17 @@
 import { fromFoodEntry, nutrientsFor } from '../foodfacts';
 import { capitalize, findFood, normalize, parseFoods, type FoodEntry } from '../foods';
 import {
+  dayFromText,
   dayName,
   generatePlan,
   planDayTotals,
   planGrocery,
   planTitle,
+  recipeForMeal,
   recipePool,
   recipeText,
+  redatePlan,
+  servingsLabel,
 } from '../mealplan';
 import { joinList, likesIn, matchShortcut, parseMemory, parseShortcutName } from '../memory';
 import {
@@ -67,13 +71,14 @@ export function localRespond(input: UserInput, ctx: BrainContext): BrainReply {
 
 /**
  * Answers that never need the network, whatever the engine: saving a meal as a
- * shortcut and using one ("la solita colazione").
+ * shortcut, using one ("la solita colazione") and reusing a past meal plan.
  */
 export function quickRespond(input: UserInput, ctx: BrainContext): BrainReply | null {
   if (input.image) return null;
   const name = parseShortcutName(input.text);
   if (name) return toReply(shortcutSaveTurn(name, ctx));
   const t = normalize(input.text);
+  if (REUSE_RE.test(t)) return toReply(reusePlanTurn(ctx));
   if (/\b(non|domani|ieri|salto|saltare|senza|quanto|quante)\b/.test(t) || input.text.includes('?'))
     return null;
   const sc = matchShortcut(input.text, ctx.shortcuts);
@@ -86,6 +91,8 @@ function route(input: UserInput, ctx: BrainContext): Turn {
 
   const planRequest = parsePlanRequest(t, ctx);
   if (planRequest) return mealPlanTurn(planRequest, ctx);
+  const planned = plannedFor(t, ctx);
+  if (planned) return planned;
 
   const memory = parseMemory(input.text);
   const patch = parsePlanChange(t);
@@ -955,34 +962,130 @@ function activePlan(ctx: BrainContext): MealPlan | null {
 
 function parsePlanRequest(t: string, ctx: BrainContext): PlanRequest | null {
   const explicit =
-    /(piano (pasti|alimentare|settimanale|giornaliero|della settimana|(di|per) (oggi|domani|la settimana|la prossima settimana|stasera))|piano dei pasti|meal ?plan|menu (settimanale|della settimana|(di|per) (oggi|domani|la settimana))|programma(re|mi)? (i |dei )?pasti|pianifica(re|mi)? (i |la )?(pasti|settimana)|organizza(re|mi)? (i |la )?(pasti|settimana)|cosa mangio (domani|questa settimana|la prossima settimana|nei prossimi giorni))/.test(
+    /(piano (pasti|alimentare|settimanale|giornaliero|della settimana|(solo )?(di|per) (oggi|domani|la settimana|la prossima settimana|stasera|un giorno))|piano dei pasti|meal ?plan|menu (settimanale|della settimana|(di|per) (oggi|domani|la settimana))|programma(re|mi)? (i |dei )?pasti|pianifica(re|mi)? (i |la )?(pasti|settimana)|organizza(re|mi)? (i |la )?(pasti|settimana)|cosa mangio (questa settimana|la prossima settimana|nei prossimi giorni))/.test(
       t
-    );
+    ) ||
+    (/cosa mangio domani/.test(t) &&
+      !activePlan(ctx)?.days.some((d) => d.date === dayFromText('domani')));
   const followUp =
     Boolean(ctx.plan) &&
     /((rifai|rigenera|cambia|un altro|nuovo) (il |un )?(piano|menu)|(piano|menu) (piu|con piu) (proteic|proteine|veloce|leggero)|piu (proteine|veloce|leggero) nel (piano|menu))/.test(
       t
     );
   if (!explicit && !followUp) return null;
-  const week =
-    /(settiman|7 giorni|sette giorni|prossimi giorni)/.test(t) ||
-    (followUp && !/(oggi|domani|giorn)/.test(t) && ctx.plan?.kind === 'week');
+  const saysWeek = /(settiman|7 giorni|sette giorni|prossimi giorni)/.test(t);
+  const saysDay = /(oggi|domani|stasera|giornaliero|un giorno|solo per)/.test(t);
+  // without a duration: the one of the plan being redone, else the user's default (a week)
+  const kind: 'day' | 'week' = saysWeek
+    ? 'week'
+    : saysDay
+      ? 'day'
+      : followUp && ctx.plan
+        ? ctx.plan.kind
+        : ctx.planPrefs.kind;
   const focus: PlanFocus = /(protein|massa)/.test(t)
     ? 'protein'
     : /(veloc|rapid|poco tempo)/.test(t)
       ? 'quick'
       : /(legger|dimagr|light)/.test(t)
         ? 'light'
-        : 'balanced';
+        : followUp && ctx.plan
+          ? ctx.plan.focus
+          : ctx.planPrefs.focus;
   return {
-    kind: week ? 'week' : 'day',
+    kind,
     focus,
-    tomorrow: !week && /domani/.test(t),
+    tomorrow: kind === 'day' && /domani/.test(t),
     fresh:
       followUp ||
-      /(nuovo|rifai|rigenera|crea|fammi|fai|genera|prepara|organizza|pianifica|programma|un altro|diverso|voglio|vorrei|mi serve|dammi)/.test(
+      /(nuovo|rifai|rigenera|crea|fammi|fai|genera|prepara|organizza|pianifica|programma|un altro|diverso|voglio|vorrei|mi serve|dammi|solo)/.test(
         t
       ),
+  };
+}
+
+const REUSE_RE =
+  /((riusa|rifai|ripeti|rimetti|riprendi|ripristina|torna al|rivoglio) (il |l |quel )?(piano|menu) (precedente|di prima|vecchio|scorso|della settimana scorsa))|((piano|menu) della settimana scorsa)/;
+
+function reusePlanTurn(ctx: BrainContext): Turn {
+  const past = ctx.pastPlans[0];
+  if (!past) {
+    return {
+      text: 'Non ho piani precedenti in memoria: li conservo quando ne crei uno nuovo. Te ne preparo uno adesso?',
+      widgets: [],
+      suggestions: ['Piano per la settimana', 'Piano per oggi'],
+    };
+  }
+  const plan = redatePlan(past);
+  return {
+    text: `Ho rimesso in piano gli stessi piatti di prima, da oggi: **${plan.days.length === 1 ? 'un giorno' : `${plan.days.length} giorni`}**. Il piano attuale resta tra i piani salvati.`,
+    widgets: [{ type: 'meal_plan', plan }],
+    suggestions: ['Lista della spesa del piano', 'Piano di oggi'],
+  };
+}
+
+const SLOT_WORD: Record<MealLabel, string> = {
+  Colazione: 'a colazione',
+  Pranzo: 'a pranzo',
+  Spuntino: 'per spuntino',
+  Cena: 'a cena',
+};
+
+/** "Cosa mangio stasera?", "cosa c'è giovedì a pranzo?": answered from the active plan. */
+function plannedFor(t: string, ctx: BrainContext): Turn | null {
+  const plan = activePlan(ctx);
+  if (!plan) return null;
+  if (
+    !/(cosa|che) (mangio|si mangia|c e|devo mangiare|prevede|ho in programma|mangiamo|tocca)|(nel|dal|secondo il) (piano|menu)/.test(
+      t
+    )
+  )
+    return null;
+  const slot = /stasera/.test(t) ? 'Cena' : slotIn(t);
+  const key = dayFromText(t) ?? (slot ? dayKey() : null);
+  if (!key) return null;
+  const day = plan.days.find((d) => d.date === key);
+  if (!day) return null;
+  const when = dayName(key).toLowerCase();
+
+  if (slot) {
+    const meal = day.meals.find((m) => m.label === slot);
+    if (!meal) return null;
+    const recipe = recipeForMeal(meal.title);
+    const lead =
+      key === dayKey() && slot === 'Cena' ? 'Stasera' : `${capitalize(when)} ${SLOT_WORD[slot]}`;
+    const k = meal.servings;
+    return {
+      text: `${lead} il piano prevede **${meal.title}**: ${formatKcal(meal.kcal)} kcal e ${Math.round(meal.protein)} g di proteine${k !== 1 ? ` (${servingsLabel(k)})` : ''}.`,
+      widgets: recipe
+        ? [
+            {
+              type: 'recipe',
+              recipe: {
+                ...recipe,
+                // the card shows the plan's portion, so "L'ho mangiata" logs the same numbers
+                kcal: meal.kcal,
+                protein: meal.protein,
+                carbs: meal.carbs,
+                fat: meal.fat,
+                tagline:
+                  k !== 1 ? `${recipe.tagline} · nel piano ${servingsLabel(k)}` : recipe.tagline,
+              },
+            },
+          ]
+        : [{ type: 'meal_plan', plan: { ...plan, kind: 'day', days: [day] } }],
+      suggestions: [
+        `Altre idee per ${slot.toLowerCase()}`,
+        'Piano di oggi',
+        'Lista della spesa del piano',
+      ],
+    };
+  }
+  const tot = planDayTotals(day);
+  return {
+    text: `${capitalize(when)} dal tuo piano: **${formatKcal(tot.kcal)} kcal** e **${Math.round(tot.protein)} g di proteine**. Tocca un piatto per la ricetta.`,
+    widgets: [{ type: 'meal_plan', plan: { ...plan, kind: 'day', days: [day] } }],
+    suggestions: ['Lista della spesa del piano', 'Rifai il piano', 'Com’è andata oggi?'],
   };
 }
 
@@ -1050,8 +1153,8 @@ function mealPlanTurn(req: PlanRequest, ctx: BrainContext): Turn {
     widgets: [{ type: 'meal_plan', plan }],
     suggestions: [
       'Lista della spesa del piano',
+      plan.kind === 'week' ? 'Piano solo per oggi' : 'Piano per la settimana',
       'Rifai il piano',
-      plan.kind === 'week' ? 'Piano di oggi' : 'Piano per la settimana',
     ],
   };
 }

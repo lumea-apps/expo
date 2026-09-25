@@ -1,4 +1,4 @@
-import { dayName, generatePlan } from './mealplan';
+import { dayName, generatePlan, redatePlan } from './mealplan';
 import { applyProfilePatch } from './nutrition';
 import { useNouri } from './store';
 import type { MealPlan, PlanFocus, ProfilePatch } from './types';
@@ -49,6 +49,24 @@ export function createMealPlan(opts: {
     {
       role: 'assistant',
       text: `Ho preparato il piano ${plan.kind === 'week' ? 'della settimana' : `di ${dayName(plan.days[0].date).toLowerCase()}`}. Tocca un piatto per la ricetta.`,
+      widgets: [{ type: 'meal_plan', plan }],
+      suggestions: ['Lista della spesa del piano', 'Piano di oggi'],
+      engine: 'local',
+    },
+    false
+  );
+  return plan;
+}
+
+/** Puts a saved plan back in use, from today, with the same dishes. */
+export function reuseMealPlan(past: MealPlan): MealPlan {
+  const s = useNouri.getState();
+  const plan = redatePlan(past);
+  s.setPlan(plan);
+  s.pushMessage(
+    {
+      role: 'assistant',
+      text: `Ho rimesso in piano gli stessi piatti, da oggi. Il piano che avevi prima resta tra i piani salvati.`,
       widgets: [{ type: 'meal_plan', plan }],
       suggestions: ['Lista della spesa del piano', 'Piano di oggi'],
       engine: 'local',

@@ -3,7 +3,7 @@ import { useCallback } from 'react';
 
 import { askNouri, type BrainReply, type UserInput } from './ai';
 import { haptic } from './haptics';
-import { dayKey } from './nutrition';
+import { applyProfilePatch, dayKey } from './nutrition';
 import { useNouri } from './store';
 
 /** Strips the light markdown we use in replies so TTS reads clean sentences. */
@@ -51,6 +51,20 @@ export function useSend() {
           }
         );
         if (reply.waterMl > 0) useNouri.getState().addWater(reply.waterMl);
+        const widgets = [...reply.widgets];
+        const current = useNouri.getState().profile;
+        if (reply.profilePatch && current) {
+          const { profile, changes } = applyProfilePatch(current, reply.profilePatch);
+          if (changes.length) {
+            useNouri.getState().setProfile(profile);
+            widgets.unshift({
+              type: 'targets',
+              before: current.targets,
+              after: profile.targets,
+              changes,
+            });
+          }
+        }
         const replyText = reply.degraded
           ? `${reply.text}\n\n*(Claude non è raggiungibile: ho risposto in modalità offline.)*`
           : reply.text;
@@ -58,7 +72,7 @@ export function useSend() {
           {
             role: 'assistant',
             text: replyText,
-            widgets: reply.widgets,
+            widgets,
             suggestions: reply.suggestions,
             engine: reply.engine,
           },

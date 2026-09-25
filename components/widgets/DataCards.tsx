@@ -1,4 +1,13 @@
-import { AlertTriangle, Droplet, Minus, Plus, Sparkles, TrendingUp } from 'lucide-react-native';
+import {
+  AlertTriangle,
+  ArrowRight,
+  Droplet,
+  Minus,
+  Plus,
+  SlidersHorizontal,
+  Sparkles,
+  TrendingUp,
+} from 'lucide-react-native';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { MacroBar, Rings } from '@/components/ui/MacroRing';
@@ -8,6 +17,7 @@ import { colors, radii } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
 import { dayKey, dayTotals, formatKcal, lastSevenDays, weekdayLetter } from '@/lib/nutrition';
 import { useNouri } from '@/lib/store';
+import type { Targets } from '@/lib/types';
 import { useAnimatedNumber } from '@/lib/useAnimatedNumber';
 
 function useToday() {
@@ -245,6 +255,75 @@ export function WeekChart() {
   );
 }
 
+/** Plan changed in conversation: what changed, and the new daily targets vs the old ones. */
+export function TargetsCard({
+  before,
+  after,
+  changes,
+}: {
+  before: Targets;
+  after: Targets;
+  changes: string[];
+}) {
+  const rows = [
+    { label: 'Kcal', b: before.kcal, a: after.kcal, unit: '', c: colors.lime },
+    { label: 'Proteine', b: before.protein, a: after.protein, unit: 'g', c: colors.protein },
+    { label: 'Carbo', b: before.carbs, a: after.carbs, unit: 'g', c: colors.carbs },
+    { label: 'Grassi', b: before.fat, a: after.fat, unit: 'g', c: colors.fat },
+  ];
+  return (
+    <Card style={{ padding: 16 }} tint="rgba(212,255,58,0.05)">
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <SlidersHorizontal size={16} color={colors.lime} />
+        <Sans size={15} weight="semi">
+          Piano aggiornato
+        </Sans>
+      </View>
+      <View style={styles.changeRow}>
+        {changes.map((c) => (
+          <View key={c} style={styles.changeChip}>
+            <Mono size={11} color={colors.ink}>
+              {c}
+            </Mono>
+          </View>
+        ))}
+      </View>
+      <View style={{ gap: 10, marginTop: 14 }}>
+        {rows.map((r) => {
+          const d = r.a - r.b;
+          return (
+            <View key={r.label} style={styles.targetRow}>
+              <View style={[styles.targetDot, { backgroundColor: r.c }]} />
+              <Sans size={14} color={colors.dim} style={{ flex: 1 }}>
+                {r.label}
+              </Sans>
+              <Mono size={13} style={d !== 0 ? { textDecorationLine: 'line-through' } : undefined}>
+                {formatKcal(r.b)}
+                {r.unit}
+              </Mono>
+              <ArrowRight size={12} color={colors.faint} />
+              <Mono
+                size={15}
+                weight="medium"
+                color={colors.ink}
+                style={{ minWidth: 58, textAlign: 'right' }}>
+                {formatKcal(r.a)}
+                {r.unit}
+              </Mono>
+              <Mono
+                size={11}
+                color={d > 0 ? colors.lime : d < 0 ? colors.amber : colors.faint}
+                style={{ width: 52, textAlign: 'right' }}>
+                {d === 0 ? '=' : `${d > 0 ? '+' : '−'}${formatKcal(Math.abs(d))}`}
+              </Mono>
+            </View>
+          );
+        })}
+      </View>
+    </Card>
+  );
+}
+
 const styles = StyleSheet.create({
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   insightIcon: {
@@ -294,4 +373,15 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(245,242,234,0.25)',
   },
   targetLabel: { position: 'absolute', right: 0, top: -14 },
+  changeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
+  changeChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(212,255,58,0.3)',
+    backgroundColor: colors.limeSoft,
+  },
+  targetRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  targetDot: { width: 6, height: 6, borderRadius: 3 },
 });

@@ -11,12 +11,22 @@ import {
   labelForTime,
   lastSevenDays,
   mealTotals,
+  applyProfilePatch,
+  greetingFor,
 } from '../nutrition';
 import { findRecipe, RECIPES, type RecipeEntry } from '../recipes';
-import type { AssistantTurn, FoodItem, MealLabel, Profile, SwapFood, Widget } from '../types';
+import type {
+  AssistantTurn,
+  FoodItem,
+  MealLabel,
+  Profile,
+  ProfilePatch,
+  SwapFood,
+  Widget,
+} from '../types';
 import type { BrainContext, BrainReply, UserInput } from './types';
 
-type Turn = AssistantTurn & { waterMl?: number };
+type Turn = AssistantTurn & { waterMl?: number; profilePatch?: ProfilePatch };
 
 export function localRespond(input: UserInput, ctx: BrainContext): BrainReply {
   const turn = route(input, ctx);
@@ -25,6 +35,7 @@ export function localRespond(input: UserInput, ctx: BrainContext): BrainReply {
     widgets: turn.widgets,
     suggestions: turn.suggestions,
     waterMl: turn.waterMl ?? 0,
+    profilePatch: turn.profilePatch,
     engine: 'local',
   };
 }
@@ -32,6 +43,9 @@ export function localRespond(input: UserInput, ctx: BrainContext): BrainReply {
 function route(input: UserInput, ctx: BrainContext): Turn {
   const t = normalize(input.text);
   if (input.image) return photoTurn(input, ctx);
+
+  const patch = parsePlanChange(t);
+  if (patch) return planTurn(patch, ctx);
 
   const water = parseWater(t);
   const foods = parseFoods(input.text).filter((f) => !(water && /acqua/.test(f.name)));
@@ -706,5 +720,180 @@ function swapTurn(t: string, ctx: BrainContext): Turn {
       'Altre idee leggere',
       `Registra ${swap.to.name.toLowerCase()}`,
     ],
+  };
+}
+
+// ——— plan changes ———
+
+const AVOID_WORDS: [RegExp, string][] = [
+  [/lattosio|latticini|latte/, 'Lattosio'],
+  [/glutine|celiac/, 'Glutine'],
+  [/frutta a guscio|noci|nocciole|mandorle|arachidi/, 'Frutta a guscio'],
+  [/crostacei|gamberi/, 'Crostacei'],
+  [/uova|uovo/, 'Uova'],
+  [/pesce/, 'Pesce'],
+  [/carne/, 'Carne'],
+];
+
+/** Detects requests to change the plan: goal, diet, weight, activity, foods to avoid, macro tweaks. */
+function parsePlanChange(t: string): ProfilePatch | null {
+  const p: ProfilePatch = {};
+  const wants = /(voglio|vorrei|obiettivo|punto a|il mio scopo|cambia|da oggi|ora)/.test(t);
+
+  if (wants && /(dimagr|perdere (peso|qualche chil|chili)|definir|asciugar)/.test(t))
+    p.goal = 'lose';
+  else if (
+    wants &&
+    /(mettere massa|aumentare (la )?massa|massa muscolare|ipertrofia|mettere su muscol)/.test(t)
+  )
+    p.goal = 'gain';
+  else if (wants && /(piu energia|avere energia|essere piu energic)/.test(t)) p.goal = 'energy';
+  else if (wants && /(mantenere|mantenermi|mangiare meglio|mangiare sano)/.test(t))
+    p.goal = 'maintain';
+
+  const diet = t.match(
+    /(?:sono|diventat[oa]|da oggi|ora|mangio) (?:\w+ )?(vegan|vegetarian|pescetarian|onnivor)/
+  );
+  if (diet) {
+    p.diet = (
+      {
+        vegan: 'vegan',
+        vegetarian: 'vegetarian',
+        pescetarian: 'pescatarian',
+        onnivor: 'omnivore',
+      } as const
+    )[diet[1] as 'vegan' | 'vegetarian' | 'pescetarian' | 'onnivor'];
+  }
+
+  const weight = t.match(
+    /(?:peso|pesavo|sono sui|sono a|arrivato a|arrivata a)\s*(\d{2,3}(?:[.,]\d)?)\s*(?:kg|chili|chilogrammi)?/
+  );
+  if (weight) p.weight = Number(weight[1].replace(',', '.'));
+
+  if (
+    /(mi alleno|allenamenti|palestra|corro|sport)/.test(t) &&
+    /(ogni giorno|tutti i giorni|[4-7] volte|spesso|di piu|molto)/.test(t)
+  ) {
+    p.activity = 'high';
+  } else if (/(sedentari|mi muovo poco|non mi alleno|smesso di allenarmi|lavoro seduto)/.test(t)) {
+    p.activity = 'low';
+  }
+
+  const avoidCtx = t.match(
+    /(?:intollerante|allergic[oa]|non (?:mangio|posso mangiare|tollero)|evito|niente|senza) (?:piu )?(?:al |alla |alle |ai |agli |il |la |le |i |gli |l )?([a-z ]+)/
+  );
+  if (avoidCtx) {
+    const hit = AVOID_WORDS.find(([re]) => re.test(avoidCtx[1]));
+    if (hit) p.avoidAdd = [hit[1]];
+  }
+  const okAgain = t.match(
+    /(?:posso (?:di nuovo|ancora) mangiare|non sono piu intollerante (?:al |alla |ai )?|di nuovo) ([a-z ]+)/
+  );
+  if (okAgain) {
+    const hit = AVOID_WORDS.find(([re]) => re.test(okAgain[1]));
+    if (hit) p.avoidRemove = [hit[1]];
+  }
+
+  if (/(piu|aumenta(re)?|alza(re)?) (di )?(le )?proteine/.test(t)) p.proteinFactor = 1.15;
+  if (/(meno|abbassa(re)?|riduci|ridurre) (le )?calorie/.test(t)) p.kcalFactor = 0.9;
+  if (/(piu|aumenta(re)?|alza(re)?) (le )?calorie/.test(t)) p.kcalFactor = 1.1;
+
+  return Object.keys(p).length ? p : null;
+}
+
+function planTurn(patch: ProfilePatch, ctx: BrainContext): Turn {
+  const { profile, changes } = applyProfilePatch(ctx.profile, patch);
+  if (!changes.length) {
+    return {
+      text: 'Il tuo piano è già impostato così 👌 Se vuoi cambiarlo, dimmi per esempio *“voglio mettere massa”* o *“sono diventato vegano”*.',
+      widgets: [],
+      suggestions: ['Com’è andata oggi?', 'Voglio più proteine', 'Idee per cena'],
+    };
+  }
+  const T = profile.targets;
+  const dietNote =
+    patch.diet || patch.avoidAdd
+      ? ' Da ora le mie idee e ricette terranno conto anche di questo.'
+      : '';
+  return {
+    text: `Fatto, piano aggiornato. Ora punti a **${formatKcal(T.kcal)} kcal** e **${T.protein} g di proteine** al giorno.${dietNote}`,
+    widgets: [],
+    suggestions: ['Idee con il nuovo piano', 'Com’è andata oggi?', 'Fammi la lista della spesa'],
+    profilePatch: patch,
+  };
+}
+
+// ——— proactive ———
+
+/**
+ * The first message of a new day, written by Nouri before the user says anything:
+ * yesterday in one line, one observation, and where to start today.
+ */
+export function dailyBrief(ctx: BrainContext): BrainReply {
+  const y = new Date();
+  y.setDate(y.getDate() - 1);
+  const yt = dayTotals(ctx.meals, dayKey(y));
+  const T = ctx.profile.targets;
+  const moment = labelForTime();
+  const hour = new Date().getHours();
+  const hello = `${greetingFor()}, ${ctx.profile.name} ${hour < 12 ? '☀️' : hour < 18 ? '🌤️' : '🌙'}`;
+  const widgets: Widget[] = [];
+  let text: string;
+  let proteinFocus = false;
+
+  if (yt.kcal === 0) {
+    text = `${hello} Ieri il diario è rimasto vuoto: nessun problema, ripartiamo da oggi.`;
+  } else {
+    const kp = Math.round((yt.kcal / T.kcal) * 100);
+    const pp = Math.round((yt.protein / T.protein) * 100);
+    proteinFocus = pp < 90;
+    text = `${hello} Ieri hai chiuso a **${formatKcal(yt.kcal)} kcal** (${kp}% del piano) con le proteine al **${pp}%**.`;
+    if (kp < 60) {
+      widgets.push({
+        type: 'insight',
+        tone: 'neutral',
+        title: 'Diario a metà',
+        body: 'Probabilmente ieri qualche pasto non è finito nel diario. Nessun problema: oggi basta una frase per ogni pasto e i conti tornano.',
+      });
+    } else if (kp > 115) {
+      widgets.push({
+        type: 'insight',
+        tone: 'warning',
+        title: 'Ieri un po’ sopra',
+        body: 'Oggi niente compensazioni drastiche: pasti normali, tanta verdura e acqua. Il corpo ragiona sulla settimana, non sul giorno.',
+      });
+    } else if (proteinFocus) {
+      widgets.push({
+        type: 'insight',
+        tone: 'neutral',
+        title: 'Oggi mettiamo al centro le proteine',
+        body: `Ne sono mancati ${Math.max(0, T.protein - yt.protein)} g. ${
+          moment === 'Colazione'
+            ? 'Partire con una colazione proteica rende tutto il resto più facile.'
+            : `A ${momentWord(moment)} scegli una fonte proteica vera: legumi, uova, pesce, tofu o yogurt greco.`
+        }`,
+      });
+    } else {
+      widgets.push({
+        type: 'insight',
+        tone: 'positive',
+        title: 'Giornata centrata',
+        body: 'Calorie e proteine nel posto giusto. Se oggi replichi lo schema di ieri, sei già a metà dell’opera.',
+      });
+    }
+  }
+
+  const picks = pickRecipes(ctx, moment, { protein: proteinFocus }).slice(0, 3);
+  if (picks.length) widgets.push({ type: 'ideas', ideas: picks.map(toIdea) });
+  return {
+    text: `${text} Ecco da dove partirei per ${momentWord(moment)}:`,
+    widgets,
+    suggestions: [
+      'Com’è andata la settimana?',
+      `Idee per ${momentWord(nextMoment(moment))}`,
+      'Ho bevuto un bicchiere d’acqua',
+    ],
+    waterMl: 0,
+    engine: 'local',
   };
 }

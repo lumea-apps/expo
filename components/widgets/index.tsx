@@ -1,6 +1,6 @@
 import type { Widget } from '@/lib/types';
 
-import { InsightCard, MacrosCard, WaterCard, WeekChart } from './DataCards';
+import { InsightCard, MacrosCard, TargetsCard, WaterCard, WeekChart } from './DataCards';
 import { GroceryCard, IdeasCarousel, RecipeCard, SwapCard } from './FoodCards';
 import { MealLogCard } from './MealLogCard';
 
@@ -33,6 +33,8 @@ export function WidgetView({
       return <GroceryCard sections={widget.sections} widgetKey={widgetKey} />;
     case 'week':
       return <WeekChart />;
+    case 'targets':
+      return <TargetsCard before={widget.before} after={widget.after} changes={widget.changes} />;
     case 'swap':
       return <SwapCard from={widget.from} to={widget.to} reason={widget.reason} />;
     default:

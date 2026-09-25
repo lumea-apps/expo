@@ -12,8 +12,16 @@ import './polyfill';
 
 import Anthropic from '@anthropic-ai/sdk';
 
-import { dayTotals, formatTime, mealsOn, mealTotals } from '../nutrition';
-import type { AssistantTurn, ChatMessage, Widget } from '../types';
+import { AVOID_OPTIONS, dayTotals, formatTime, mealsOn, mealTotals } from '../nutrition';
+import type {
+  Activity,
+  AssistantTurn,
+  ChatMessage,
+  Diet,
+  Goal,
+  ProfilePatch,
+  Widget,
+} from '../types';
 import type { BrainContext, BrainReply, UserInput } from './types';
 
 export const CLAUDE_MODEL = 'claude-opus-5';
@@ -56,6 +64,11 @@ Ogni risposta è un oggetto JSON con:
   • swap — uno scambio furbo: alimento di partenza → alternativa, con motivo.
 - "suggestions": 2–3 risposte rapide che l'utente potrebbe toccare, scritte in prima persona dal punto di vista dell'utente (max ~32 caratteri).
 - "water_ml": millilitri d'acqua che l'utente dice di aver appena bevuto in questo messaggio, altrimenti 0.
+- "profile_changes": solo se l'utente chiede di cambiare il suo piano, altrimenti []. Campi e valori ammessi:
+  goal = lose | energy | gain | maintain · diet = omnivore | vegetarian | vegan | pescatarian · weight = kg (es. "68.5") ·
+  activity = low | medium | high · avoid_add / avoid_remove = Lattosio | Glutine | Frutta a guscio | Crostacei | Uova | Pesce | Carne ·
+  protein_factor / kcal_factor = moltiplicatore tra 0.7 e 1.4 (es. "più proteine" → protein_factor "1.15").
+  L'app ricalcola i target e mostra da sola una card con il prima e il dopo: nel testo conferma la modifica in una frase, senza ripetere i numeri.
 
 PRINCIPI
 - Usa il contesto <oggi> per personalizzare: macro rimanenti, pasti già registrati, obiettivo, dieta, alimenti da evitare. Non proporre mai cibi che l'utente evita o incompatibili con la sua dieta.
@@ -149,6 +162,25 @@ const TURN_SCHEMA = obj({
   },
   suggestions: { type: 'array', items: STR },
   water_ml: NUM,
+  profile_changes: {
+    type: 'array',
+    items: obj({
+      field: {
+        type: 'string',
+        enum: [
+          'goal',
+          'diet',
+          'weight',
+          'activity',
+          'avoid_add',
+          'avoid_remove',
+          'protein_factor',
+          'kcal_factor',
+        ],
+      },
+      value: STR,
+    }),
+  },
 });
 
 function contextBlock(ctx: BrainContext): string {
@@ -245,12 +277,41 @@ export async function claudeRespond(input: UserInput, ctx: BrainContext): Promis
     (b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text'
   );
   if (!textBlock) throw new Error(`Claude returned no text (stop_reason: ${response.stop_reason})`);
-  const parsed = JSON.parse(textBlock.text) as Partial<AssistantTurn> & { water_ml?: number };
+  const parsed = JSON.parse(textBlock.text) as Partial<AssistantTurn> & {
+    water_ml?: number;
+    profile_changes?: { field: string; value: string }[];
+  };
   return {
     ...sanitize(parsed),
     waterMl: Math.max(0, Math.round(parsed.water_ml ?? 0)),
+    profilePatch: toPatch(parsed.profile_changes ?? []),
     engine: 'claude',
   };
+}
+
+const GOALS: Goal[] = ['lose', 'energy', 'gain', 'maintain'];
+const DIETS: Diet[] = ['omnivore', 'vegetarian', 'vegan', 'pescatarian'];
+const ACTIVITIES: Activity[] = ['low', 'medium', 'high'];
+
+/** Turns Claude's `profile_changes` list into a validated patch (unknown values are dropped). */
+function toPatch(changes: { field: string; value: string }[]): ProfilePatch | undefined {
+  const p: ProfilePatch = {};
+  const avoid = (v: string) =>
+    AVOID_OPTIONS.find((a) => a.toLowerCase() === v.trim().toLowerCase());
+  for (const { field, value } of changes) {
+    const num = Number(String(value).replace(',', '.'));
+    if (field === 'goal' && GOALS.includes(value as Goal)) p.goal = value as Goal;
+    if (field === 'diet' && DIETS.includes(value as Diet)) p.diet = value as Diet;
+    if (field === 'activity' && ACTIVITIES.includes(value as Activity))
+      p.activity = value as Activity;
+    if (field === 'weight' && Number.isFinite(num)) p.weight = num;
+    if (field === 'protein_factor' && Number.isFinite(num)) p.proteinFactor = num;
+    if (field === 'kcal_factor' && Number.isFinite(num)) p.kcalFactor = num;
+    if (field === 'avoid_add' && avoid(value)) p.avoidAdd = [...(p.avoidAdd ?? []), avoid(value)!];
+    if (field === 'avoid_remove' && avoid(value))
+      p.avoidRemove = [...(p.avoidRemove ?? []), avoid(value)!];
+  }
+  return Object.keys(p).length ? p : undefined;
 }
 
 /** Defensive pass: keep only widgets the UI knows how to draw, with sane numbers. */

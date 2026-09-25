@@ -13,6 +13,7 @@ import { Mono, Sans, Serif } from '@/components/ui/Typography';
 import { colors, fonts } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
 import {
+  AVOID_OPTIONS,
   activityLabels,
   computeTargets,
   dietLabels,
@@ -25,7 +26,6 @@ import { useAnimatedNumber } from '@/lib/useAnimatedNumber';
 
 type Step = 'name' | 'goal' | 'diet' | 'avoid' | 'weight' | 'activity' | 'reveal';
 const ORDER: Step[] = ['name', 'goal', 'diet', 'avoid', 'weight', 'activity', 'reveal'];
-const AVOID = ['Lattosio', 'Glutine', 'Frutta a guscio', 'Crostacei', 'Uova', 'Pesce', 'Carne'];
 
 export default function Onboarding() {
   const router = useRouter();
@@ -156,7 +156,7 @@ export default function Onboarding() {
                 {step === 'avoid' && (
                   <>
                     <View style={styles.wrap}>
-                      {AVOID.map((a) => (
+                      {AVOID_OPTIONS.map((a) => (
                         <Chip
                           key={a}
                           label={a}

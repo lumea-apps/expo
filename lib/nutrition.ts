@@ -1,4 +1,14 @@
-import type { Activity, Goal, Macros, Meal, MealLabel, Targets } from './types';
+import type {
+  Activity,
+  Diet,
+  Goal,
+  Macros,
+  Meal,
+  MealLabel,
+  Profile,
+  ProfilePatch,
+  Targets,
+} from './types';
 
 export const ZERO: Macros = { kcal: 0, protein: 0, carbs: 0, fat: 0 };
 
@@ -117,7 +127,7 @@ export const goalLabels: Record<Goal, string> = {
   maintain: 'Mangiare meglio',
 };
 
-export const dietLabels: Record<import('./types').Diet, string> = {
+export const dietLabels: Record<Diet, string> = {
   omnivore: 'Onnivoro',
   vegetarian: 'Vegetariano',
   vegan: 'Vegano',
@@ -129,3 +139,91 @@ export const activityLabels: Record<Activity, string> = {
   medium: 'Un po’',
   high: 'Tanto',
 };
+
+export const AVOID_OPTIONS = [
+  'Lattosio',
+  'Glutine',
+  'Frutta a guscio',
+  'Crostacei',
+  'Uova',
+  'Pesce',
+  'Carne',
+];
+
+/**
+ * Applies a conversational plan change. Goal / weight / activity changes
+ * recompute the plan from scratch; protein and calorie factors then nudge it,
+ * rebalancing carbohydrates so the numbers stay coherent.
+ */
+export function applyProfilePatch(
+  profile: Profile,
+  patch: ProfilePatch
+): { profile: Profile; changes: string[] } {
+  const changes: string[] = [];
+  const next: Profile = { ...profile, avoid: [...profile.avoid] };
+
+  if (patch.goal && patch.goal !== profile.goal) {
+    next.goal = patch.goal;
+    changes.push(`Obiettivo · ${goalLabels[patch.goal]}`);
+  }
+  if (patch.diet && patch.diet !== profile.diet) {
+    next.diet = patch.diet;
+    changes.push(`Alimentazione · ${dietLabels[patch.diet]}`);
+  }
+  if (patch.weight && patch.weight > 30 && patch.weight < 250 && patch.weight !== profile.weight) {
+    next.weight = Math.round(patch.weight * 10) / 10;
+    changes.push(`Peso · ${next.weight} kg`);
+  }
+  if (patch.activity && patch.activity !== profile.activity) {
+    next.activity = patch.activity;
+    changes.push(`Attività · ${activityLabels[patch.activity]}`);
+  }
+  for (const a of patch.avoidAdd ?? []) {
+    if (!next.avoid.includes(a)) {
+      next.avoid.push(a);
+      changes.push(`Evito · ${a}`);
+    }
+  }
+  for (const a of patch.avoidRemove ?? []) {
+    if (next.avoid.includes(a)) {
+      next.avoid = next.avoid.filter((x) => x !== a);
+      changes.push(`Di nuovo ok · ${a}`);
+    }
+  }
+
+  let targets =
+    next.goal !== profile.goal ||
+    next.weight !== profile.weight ||
+    next.activity !== profile.activity
+      ? computeTargets(next.goal, next.weight, next.activity)
+      : { ...profile.targets };
+
+  const pf = clampFactor(patch.proteinFactor);
+  if (pf !== 1) {
+    const protein = Math.round(targets.protein * pf);
+    const carbs = Math.max(60, targets.carbs - (protein - targets.protein));
+    targets = { ...targets, protein, carbs };
+    changes.push(`Proteine ${pf > 1 ? '+' : '−'}${Math.round(Math.abs(pf - 1) * 100)}%`);
+  }
+  const kf = clampFactor(patch.kcalFactor);
+  if (kf !== 1) {
+    const kcal = Math.round((targets.kcal * kf) / 10) * 10;
+    const rest = targets.kcal - targets.protein * 4;
+    const scale = rest > 0 ? (kcal - targets.protein * 4) / rest : 1;
+    targets = {
+      ...targets,
+      kcal,
+      carbs: Math.max(60, Math.round(targets.carbs * scale)),
+      fat: Math.max(30, Math.round(targets.fat * scale)),
+    };
+    changes.push(`Calorie ${kf > 1 ? '+' : '−'}${Math.round(Math.abs(kf - 1) * 100)}%`);
+  }
+
+  next.targets = targets;
+  return { profile: next, changes };
+}
+
+function clampFactor(f?: number): number {
+  if (!f || !Number.isFinite(f)) return 1;
+  return Math.min(1.4, Math.max(0.7, f));
+}

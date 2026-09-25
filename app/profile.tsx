@@ -70,7 +70,8 @@ export default function Profile() {
             <Target label="Grassi" value={`${T.fat}g`} color={colors.fat} />
           </View>
           <Sans size={13} color={colors.faint} style={{ marginTop: 12 }}>
-            Calcolato da obiettivo, peso e attività. Per ricalcolarlo, ricomincia da capo qui sotto.
+            Per cambiarlo basta dirlo a Nouri in chat: “voglio più proteine”, “sono diventato
+            vegano”, “ora peso 68 kg”.
           </Sans>
         </Card>
 

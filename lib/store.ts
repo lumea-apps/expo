@@ -14,6 +14,8 @@ interface NouriState {
   logged: Record<string, string>;
   checked: Record<string, boolean>;
   speakReplies: boolean;
+  /** Day key of the last proactive morning brief, so it is posted once per day. */
+  lastBrief: string | null;
 
   // ephemeral (not persisted)
   hydrated: boolean;
@@ -29,6 +31,7 @@ interface NouriState {
   setThinking: (v: boolean) => void;
   toggleChecked: (key: string) => void;
   setSpeakReplies: (v: boolean) => void;
+  markBrief: (day: string) => void;
   clearChat: () => void;
   seedDemoWeek: () => void;
   resetAll: () => void;
@@ -44,6 +47,7 @@ export const useNouri = create<NouriState>()(
       logged: {},
       checked: {},
       speakReplies: false,
+      lastBrief: null,
       hydrated: false,
       thinking: false,
       fresh: {},
@@ -92,6 +96,8 @@ export const useNouri = create<NouriState>()(
       toggleChecked: (key) => set((s) => ({ checked: { ...s.checked, [key]: !s.checked[key] } })),
 
       setSpeakReplies: (speakReplies) => set({ speakReplies }),
+
+      markBrief: (lastBrief) => set({ lastBrief }),
 
       clearChat: () => set({ messages: [], logged: {}, checked: {}, fresh: {} }),
 
@@ -144,6 +150,7 @@ export const useNouri = create<NouriState>()(
 
       resetAll: () =>
         set({
+          lastBrief: null,
           profile: null,
           meals: [],
           water: {},
@@ -163,6 +170,7 @@ export const useNouri = create<NouriState>()(
         logged: s.logged,
         checked: s.checked,
         speakReplies: s.speakReplies,
+        lastBrief: s.lastBrief,
         // keep the chat light: large inline data-URIs (web photos) are dropped
         messages: s.messages
           .slice(-80)

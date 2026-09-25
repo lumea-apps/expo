@@ -34,7 +34,7 @@ The whole product is a conversation; data screens are secondary. See `README.md`
 
 Key modules:
 
-- `lib/ai/` - The "brain". `askNouri()` uses Claude (`claude.ts`, structured outputs → widgets) when `EXPO_PUBLIC_NOURI_API_URL` or `EXPO_PUBLIC_ANTHROPIC_API_KEY` is set, otherwise the offline Italian intent engine (`local.ts`). Both return `{ text, widgets, suggestions, waterMl }`.
+- `lib/ai/` - The "brain". `askNouri()` uses Claude (`claude.ts`, structured outputs → widgets) when `EXPO_PUBLIC_NOURI_API_URL` or `EXPO_PUBLIC_ANTHROPIC_API_KEY` is set, otherwise the offline Italian intent engine (`local.ts`). Both return `{ text, widgets, suggestions, waterMl, profilePatch }`; `lib/useSend.ts` applies water and plan changes (`applyProfilePatch` in `lib/nutrition.ts`) and adds the `targets` card. `dailyBrief()` in `local.ts` posts the first message of each new day.
 - `lib/types.ts` - `Widget` union = the generative-UI contract. Adding a widget means: type here → schema in `lib/ai/claude.ts` → card in `components/widgets/` → case in `components/widgets/index.tsx`.
 - `lib/store.ts` - Zustand store persisted with AsyncStorage (profile, meals, water, chat).
 - `lib/foods.ts`, `lib/recipes.ts` - Food table + recipe catalogue used by the offline brain.

@@ -88,7 +88,21 @@ export type Widget =
   | { type: 'water' }
   | { type: 'grocery'; sections: { title: string; items: string[] }[] }
   | { type: 'week' }
-  | { type: 'swap'; from: SwapFood; to: SwapFood; reason: string };
+  | { type: 'swap'; from: SwapFood; to: SwapFood; reason: string }
+  | { type: 'targets'; before: Targets; after: Targets; changes: string[] };
+
+/** A change to the user's plan requested in conversation ("voglio mettere massa"). */
+export interface ProfilePatch {
+  goal?: Goal;
+  diet?: Diet;
+  weight?: number;
+  activity?: Activity;
+  avoidAdd?: string[];
+  avoidRemove?: string[];
+  /** Multiplies the current protein / calorie target (e.g. 1.15 = +15%). */
+  proteinFactor?: number;
+  kcalFactor?: number;
+}
 
 export interface AssistantTurn {
   text: string;

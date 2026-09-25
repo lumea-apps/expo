@@ -1,10 +1,11 @@
 import { Redirect } from 'expo-router';
-import { useCallback, useEffect, useRef } from 'react';
+import { Fragment, useCallback, useEffect, useRef } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Composer } from '@/components/chat/Composer';
+import { DayDivider } from '@/components/chat/DayDivider';
 import { Greeting } from '@/components/chat/Greeting';
 import { ChatHeader } from '@/components/chat/Header';
 import { MessageView } from '@/components/chat/MessageView';
@@ -12,6 +13,8 @@ import { Thinking } from '@/components/chat/Thinking';
 import { Aurora } from '@/components/ui/Aurora';
 import { colors } from '@/constants/theme';
 import type { UserInput } from '@/lib/ai';
+import { dailyBrief } from '@/lib/ai/local';
+import { dayKey } from '@/lib/nutrition';
 import { pickMealPhoto } from '@/lib/pickImage';
 import { useNouri } from '@/lib/store';
 import { useSend } from '@/lib/useSend';
@@ -46,6 +49,34 @@ export default function ChatScreen() {
     const img = await pickMealPhoto('library');
     if (img) sendInput({ text: '', image: img });
   }, [sendInput]);
+
+  // First open of a new day: Nouri starts the conversation with a short brief.
+  const hasProfile = Boolean(profile);
+  useEffect(() => {
+    if (!hydrated || !hasProfile) return;
+    const s = useNouri.getState();
+    const today = dayKey();
+    if (s.lastBrief === today) return;
+    s.markBrief(today);
+    const last = s.messages[s.messages.length - 1];
+    if (!last || dayKey(last.at) === today || !s.profile) return;
+    const brief = dailyBrief({
+      profile: s.profile,
+      meals: s.meals,
+      waterToday: s.water[today] ?? 0,
+      history: s.messages,
+    });
+    s.pushMessage(
+      {
+        role: 'assistant',
+        text: brief.text,
+        widgets: brief.widgets,
+        suggestions: brief.suggestions,
+        engine: 'local',
+      },
+      true
+    );
+  }, [hydrated, hasProfile]);
 
   useEffect(() => {
     if (!messages.length && !thinking) return;
@@ -88,12 +119,14 @@ export default function ChatScreen() {
           }}>
           <Greeting compact={messages.length > 0} onSend={sendText} onPhoto={sendPhoto} />
           {messages.map((m, i) => (
-            <MessageView
-              key={m.id}
-              message={m}
-              afterPhoto={m.role === 'assistant' && Boolean(messages[i - 1]?.imageUri)}
-              onSend={sendText}
-            />
+            <Fragment key={m.id}>
+              {i > 0 && dayKey(m.at) !== dayKey(messages[i - 1].at) && <DayDivider at={m.at} />}
+              <MessageView
+                message={m}
+                afterPhoto={m.role === 'assistant' && Boolean(messages[i - 1]?.imageUri)}
+                onSend={sendText}
+              />
+            </Fragment>
           ))}
           {thinking && <Thinking photo={Boolean(lastUser?.imageUri)} />}
         </ScrollView>

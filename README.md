@@ -27,6 +27,9 @@ Riferimenti studiati: i trend 2026 per le app AI (generative UI, orb vocale che 
   - `water`: tracker a bicchieri.
   - `week`: grafico degli ultimi 7 giorni.
   - `insight`: una nota concreta sui tuoi dati.
+  - `targets`: il piano aggiornato, con il prima e il dopo, quando lo cambi parlando.
+- **Piano modificabile parlando**: *"voglio mettere massa"*, *"sono diventato vegano"*, *"ora peso 68 kg"*, *"sono intollerante al lattosio"*, *"voglio più proteine"*. Nouri ricalcola i target e mostra cosa è cambiato.
+- **Brief del mattino**: al primo accesso di un nuovo giorno Nouri scrive per primo, con il resoconto di ieri, una nota e le idee per il prossimo pasto.
 - **Foto del piatto**: scatta o carica una foto e Nouri riconosce ingredienti e porzioni.
 - **Modalità voce**: orb a tutto schermo e risposte lette ad alta voce (`expo-speech`). La dettatura usa la Web Speech API su web e il microfono della tastiera su iOS e Android.
 - **Oggi**: anelli concentrici, barre dei macro, acqua, timeline dei pasti e una nota di Nouri.

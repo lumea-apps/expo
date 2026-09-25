@@ -1,4 +1,4 @@
-import type { AssistantTurn, ChatMessage, Meal, Profile } from '../types';
+import type { AssistantTurn, ChatMessage, Meal, Profile, ProfilePatch } from '../types';
 
 export interface BrainContext {
   profile: Profile;
@@ -16,6 +16,8 @@ export interface UserInput {
 export interface BrainReply extends AssistantTurn {
   /** Water the user said they drank in this message (ml), applied by the client. */
   waterMl: number;
+  /** Plan changes requested in this message, applied by the client. */
+  profilePatch?: ProfilePatch;
   engine: 'claude' | 'local';
   /** Set when Claude was configured but unreachable and the local brain answered instead. */
   degraded?: boolean;

@@ -1,30 +1,7 @@
-import { Link, Stack } from 'expo-router';
+import { Redirect } from 'expo-router';
 
-  import { Text, View } from 'react-native';
-
-
+// Any unknown path (a stale deep link, or the page URL when the web build is
+// hosted under a sub-path) simply lands on the conversation.
 export default function NotFoundScreen() {
-
-  return (
-    
-      <>
-        <Stack.Screen options={{ title: "Oops!" }} />
-        <View className={styles.container}>
-          <Text className={styles.title}>{"This screen doesn't exist."}</Text>
-          <Link href="/" className={styles.link}>
-            <Text className={styles.linkText}>Go to home screen!</Text>
-          </Link>
-        </View>
-      </>
-    
-  );
+  return <Redirect href="/" />;
 }
-
-
-  const styles = {
-		container: `items-center flex-1 justify-center p-5`,
-    title: `text-xl font-bold`,
-    link: `mt-4 pt-4`,
-    linkText: `text-base text-[#2e78b7]`,
-	};
-

@@ -1,0 +1,243 @@
+import { useMemo, useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
+
+import { ShortcutEditor } from '@/components/memory/ShortcutEditor';
+import { Icon } from '@/components/ui/Icon';
+import { useSheet } from '@/components/ui/Sheet';
+import { Card, IconButton, PrimaryButton } from '@/components/ui/Surface';
+import { Mono, Sans } from '@/components/ui/Typography';
+import { colors, radii } from '@/constants/theme';
+import { haptic } from '@/lib/haptics';
+import { formatKcal, formatTime, mealTotals } from '@/lib/nutrition';
+import { useNouri } from '@/lib/store';
+import type { FoodItem, MealDraft } from '@/lib/types';
+import { useAnimatedNumber } from '@/lib/useAnimatedNumber';
+
+import { MealBreakdown } from './MealBreakdown';
+
+const PORTIONS = [1, 1.5, 2, 0.5];
+
+function confidence(c = 0.8): { label: string; color: string } {
+  if (c >= 0.8) return { label: 'Alta', color: colors.positive };
+  if (c >= 0.6) return { label: 'Media', color: colors.amber };
+  return { label: 'Bassa', color: colors.rose };
+}
+
+function scale(item: FoodItem, k: number): FoodItem {
+  if (k === 1) return item;
+  return {
+    ...item,
+    qty: `${item.qty} ×${k}`,
+    kcal: Math.round(item.kcal * k),
+    protein: item.protein * k,
+    carbs: item.carbs * k,
+    fat: item.fat * k,
+  };
+}
+
+export function MealLogCard({
+  meal,
+  widgetKey,
+  photoUri,
+  animate = false,
+}: {
+  meal: MealDraft;
+  widgetKey: string;
+  /** The photo the estimate comes from, if any. */
+  photoUri?: string;
+  /** Fresh reply: play the breakdown animation. */
+  animate?: boolean;
+}) {
+  const photo = Boolean(photoUri);
+  const loggedId = useNouri((s) => s.logged[widgetKey]);
+  const loggedMeal = useNouri((s) => s.meals.find((m) => m.id === loggedId));
+  const logMeal = useNouri((s) => s.logMeal);
+  const removeMeal = useNouri((s) => s.removeMeal);
+  const sheet = useSheet();
+  const [mult, setMult] = useState<number[]>(() => meal.items.map(() => 1));
+  const [savedAs, setSavedAs] = useState<string | null>(null);
+
+  const items = useMemo(
+    () => meal.items.map((it, i) => scale(it, mult[i] ?? 1)),
+    [meal.items, mult]
+  );
+  const tot = mealTotals({ items });
+  const saveShortcut = () =>
+    sheet.open({
+      title: 'Salva come scorciatoia',
+      render: (close) => (
+        <ShortcutEditor
+          meal={{ ...meal, items: loggedMeal?.items ?? items }}
+          close={close}
+          onSaved={setSavedAs}
+        />
+      ),
+    });
+  const locked = Boolean(loggedId);
+  const [play] = useState(animate);
+  const kcal = useAnimatedNumber(tot.kcal, play ? 1300 : 1, play ? 900 : 0);
+
+  return (
+    <Card>
+      <View style={styles.header}>
+        <View style={{ flex: 1 }}>
+          <Sans size={12} color={colors.faint}>
+            {meal.label} · {photo ? 'stima dalla foto' : 'stima dal tuo racconto'}
+          </Sans>
+          <Sans size={16} weight="semi" numberOfLines={2} style={{ marginTop: 2 }}>
+            {meal.title}
+          </Sans>
+        </View>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Mono size={22} weight="medium" color={colors.ink} style={{ letterSpacing: -0.5 }}>
+            {formatKcal(kcal)}
+          </Mono>
+          <Mono size={11}>kcal</Mono>
+        </View>
+      </View>
+
+      <View style={styles.breakdown}>
+        <MealBreakdown
+          items={items}
+          emoji={meal.emoji}
+          photoUri={photoUri}
+          totals={tot}
+          animate={play}
+        />
+      </View>
+
+      <View style={styles.items}>
+        {items.map((it, i) => {
+          const c = it.confidence !== undefined ? confidence(it.confidence) : null;
+          return (
+            <Pressable
+              key={`${it.name}${i}`}
+              disabled={locked}
+              onPress={() => {
+                haptic.select();
+                setMult((m) =>
+                  m.map((v, j) =>
+                    j === i ? PORTIONS[(PORTIONS.indexOf(v) + 1) % PORTIONS.length] : v
+                  )
+                );
+              }}
+              style={({ pressed }) => [
+                styles.item,
+                pressed && { backgroundColor: colors.bgSubtle },
+              ]}>
+              <View style={styles.emoji}>
+                <Sans size={16}>{it.emoji}</Sans>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Sans size={14} weight="medium" numberOfLines={1}>
+                  {it.name}
+                </Sans>
+                <Sans size={12} color={colors.faint}>
+                  {it.qty}
+                  {c ? ` · affidabilità ${c.label.toLowerCase()}` : ''}
+                </Sans>
+              </View>
+              {c && <View style={[styles.dot, { backgroundColor: c.color }]} />}
+              <Mono size={13} color={colors.ink} style={{ width: 40, textAlign: 'right' }}>
+                {formatKcal(it.kcal)}
+              </Mono>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <View style={styles.footer}>
+        {locked ? (
+          <Animated.View entering={FadeIn} style={styles.logged}>
+            <Icon name="check-circle-bold" size={18} color={colors.positive} />
+            <Sans size={14} weight="medium" color={colors.positive} style={{ flex: 1 }}>
+              Nel diario{loggedMeal ? ` alle ${formatTime(loggedMeal.at)}` : ''}
+            </Sans>
+            <Pressable
+              hitSlop={8}
+              onPress={() => {
+                haptic.tap();
+                if (loggedId) removeMeal(loggedId);
+              }}>
+              <Sans size={14} weight="medium" color={colors.dim}>
+                Annulla
+              </Sans>
+            </Pressable>
+            {!savedAs && (
+              <IconButton label="Salva come scorciatoia" size={34} onPress={() => saveShortcut()}>
+                <Icon name="bookmark-linear" size={19} color={colors.dim} />
+              </IconButton>
+            )}
+          </Animated.View>
+        ) : (
+          <>
+            <Sans size={12} color={colors.faint} center style={{ marginBottom: 10 }}>
+              Tocca una voce per cambiare la porzione
+            </Sans>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {!savedAs && (
+                <IconButton
+                  label="Salva come scorciatoia"
+                  size={46}
+                  onPress={() => saveShortcut()}
+                  style={styles.save}>
+                  <Icon name="bookmark-linear" size={20} />
+                </IconButton>
+              )}
+              <PrimaryButton
+                label="Aggiungi al diario"
+                style={{ height: 46, flex: 1 }}
+                onPress={() => {
+                  logMeal({ ...meal, items }, photo ? 'photo' : 'chat', widgetKey);
+                  haptic.success();
+                }}
+              />
+            </View>
+          </>
+        )}
+        {savedAs && (
+          <Sans size={12} color={colors.faint} center style={{ marginTop: 8 }}>
+            Salvata come scorciatoia «{savedAs}»
+          </Sans>
+        )}
+      </View>
+    </Card>
+  );
+}
+
+const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    padding: 16,
+    paddingBottom: 0,
+  },
+  breakdown: { paddingHorizontal: 8, paddingTop: 14 },
+  items: { marginTop: 12, borderTopWidth: 1, borderColor: colors.border, paddingVertical: 4 },
+  item: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+  },
+  emoji: {
+    width: 32,
+    height: 32,
+    borderRadius: radii.sm,
+    backgroundColor: colors.bgSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  footer: { padding: 16, paddingTop: 8, borderTopWidth: 1, borderColor: colors.border },
+  logged: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    height: 38,
+  },
+  save: { borderWidth: 1, borderColor: colors.borderStrong },
+});

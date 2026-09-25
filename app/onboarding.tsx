@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { Redirect, useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -36,25 +36,43 @@ import {
   goalLabels,
 } from '@/lib/nutrition';
 import { useNouri } from '@/lib/store';
-import type { Activity, Diet, Goal } from '@/lib/types';
+import type { Activity, Diet, Goal, OnboardingDraft } from '@/lib/types';
 import { useAnimatedNumber } from '@/lib/useAnimatedNumber';
 
 type Step = 'name' | 'goal' | 'diet' | 'avoid' | 'weight' | 'activity' | 'reveal';
 const ORDER: Step[] = ['name', 'goal', 'diet', 'avoid', 'weight', 'activity', 'reveal'];
 
+/**
+ * Onboarding happens once. Once it's done the screen sends you to the chat
+ * (even when opened directly); if it's interrupted, it resumes from the
+ * last answer.
+ */
 export default function Onboarding() {
+  const hydrated = useNouri((s) => s.hydrated);
+  const profile = useNouri((s) => s.profile);
+  // decided once, when the stored state is known: finishing it here must not bounce away
+  const doneBefore = useRef<boolean | null>(null);
+  if (hydrated && doneBefore.current === null) doneBefore.current = Boolean(profile);
+
+  if (!hydrated) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
+  if (doneBefore.current) return <Redirect href="/" />;
+  return <OnboardingFlow draft={useNouri.getState().onboardingDraft} />;
+}
+
+function OnboardingFlow({ draft }: { draft: OnboardingDraft | null }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const setProfile = useNouri((s) => s.setProfile);
+  const setDraft = useNouri((s) => s.setOnboardingDraft);
 
-  const [step, setStep] = useState<Step>('name');
+  const [step, setStep] = useState<Step>(draft?.step ?? 'name');
   const [orb, setOrb] = useState<OrbState>('idle');
-  const [name, setName] = useState('');
-  const [goal, setGoal] = useState<Goal>('energy');
-  const [diet, setDiet] = useState<Diet>('omnivore');
-  const [avoid, setAvoid] = useState<string[]>([]);
-  const [weight, setWeight] = useState('');
-  const [activity, setActivity] = useState<Activity>('medium');
+  const [name, setName] = useState(draft?.name ?? '');
+  const [goal, setGoal] = useState<Goal>(draft?.goal ?? 'energy');
+  const [diet, setDiet] = useState<Diet>(draft?.diet ?? 'omnivore');
+  const [avoid, setAvoid] = useState<string[]>(draft?.avoid ?? []);
+  const [weight, setWeight] = useState(draft?.weight ?? '');
+  const [activity, setActivity] = useState<Activity>(draft?.activity ?? 'medium');
 
   const next = () => {
     haptic.soft();
@@ -70,8 +88,16 @@ export default function Onboarding() {
   const kg = Number(weight.replace(',', '.')) || null;
   const targets = computeTargets(goal, kg, activity);
 
-  const finish = () => {
-    haptic.success();
+  // every answer is kept, so closing the app mid-way doesn't start over
+  useEffect(() => {
+    if (step !== 'reveal') setDraft({ step, name, goal, diet, avoid, weight, activity });
+  }, [step, name, goal, diet, avoid, weight, activity, setDraft]);
+
+  // the profile is saved as soon as the plan is revealed: onboarding is done from here
+  const saved = useRef(false);
+  useEffect(() => {
+    if (step !== 'reveal' || saved.current) return;
+    saved.current = true;
     setProfile({
       name: first,
       goal,
@@ -82,6 +108,10 @@ export default function Onboarding() {
       targets,
       createdAt: new Date().toISOString(),
     });
+  }, [step, first, goal, diet, avoid, kg, activity, targets, setProfile]);
+
+  const finish = () => {
+    haptic.success();
     router.replace('/');
   };
 

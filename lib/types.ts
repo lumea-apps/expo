@@ -14,6 +14,17 @@ export interface Targets extends Macros {
   water: number; // ml
 }
 
+/** Onboarding answers saved step by step, so an interrupted onboarding resumes where it was. */
+export interface OnboardingDraft {
+  step: 'name' | 'goal' | 'diet' | 'avoid' | 'weight' | 'activity';
+  name: string;
+  goal: Goal;
+  diet: Diet;
+  avoid: string[];
+  weight: string;
+  activity: Activity;
+}
+
 export interface Profile {
   name: string;
   goal: Goal;

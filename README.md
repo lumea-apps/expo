@@ -18,7 +18,7 @@ Chiara, tipografica e silenziosa, a metà tra ElevenLabs e ChatGPT: la conversaz
 
 ## Cosa fa
 
-- **Onboarding conversazionale**: sei domande, una alla volta, poi Nouri mostra il tuo "ritmo" (kcal, macro, acqua).
+- **Onboarding conversazionale**: sei domande, una alla volta, poi Nouri mostra il tuo "ritmo" (kcal, macro, acqua). Si fa una volta sola: le risposte vengono salvate man mano (se chiudi a metà riprendi da dove eri), il profilo è salvato appena vedi il piano e da lì in poi l'app apre sempre la chat. Le risposte restano in **Memoria › Il tuo profilo**.
 - **Chat con widget generativi**:
   - `meal_log`: pasto scomposto in voci, con badge di confidenza. Tocchi una voce per cambiare la porzione, poi registri.
   - `macros`: anelli e barre della giornata, sempre aggiornati.

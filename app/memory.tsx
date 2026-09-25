@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ShortcutEditor } from '@/components/memory/ShortcutEditor';
 import { kindLabel, PlanPrefsEditor } from '@/components/plan/PlanPrefsEditor';
+import { activityIcons, dietIcons, goalIcons } from '@/constants/icons';
 import { Icon, IconTile, type IconName } from '@/components/ui/Icon';
 import { MenuGroup, MenuRow } from '@/components/ui/Menu';
 import { SheetProvider, useSheet, type CloseSheet } from '@/components/ui/Sheet';
@@ -14,7 +15,15 @@ import { Display, Sans } from '@/components/ui/Typography';
 import { colors, fonts, radii, type Tint } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
 import { focusLabels, planTitle } from '@/lib/mealplan';
-import { dayKey, formatKcal, formatTime, mealTotals } from '@/lib/nutrition';
+import {
+  activityLabels,
+  dayKey,
+  dietLabels,
+  formatKcal,
+  formatTime,
+  goalLabels,
+  mealTotals,
+} from '@/lib/nutrition';
 import { logShortcut } from '@/lib/shortcuts';
 import { useNouri } from '@/lib/store';
 import type { Meal, MealDraft, MemoryKind, MemoryNote, Shortcut } from '@/lib/types';
@@ -74,6 +83,7 @@ function MemoryContent() {
   const memories = useNouri((s) => s.memories);
   const shortcuts = useNouri((s) => s.shortcuts);
   const meals = useNouri((s) => s.meals);
+  const profile = useNouri((s) => s.profile);
   const plan = useNouri((s) => s.plan);
   const pastPlans = useNouri((s) => s.pastPlans);
   const planPrefs = useNouri((s) => s.planPrefs);
@@ -238,6 +248,61 @@ function MemoryContent() {
             }
           />
         </MenuGroup>
+
+        {profile && (
+          <MenuGroup
+            title="Il tuo profilo"
+            footer={`Dall’onboarding del ${new Date(profile.createdAt).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })}: Nouri non te lo richiede più. Tocca per cambiare qualcosa, o dillo in chat («ora peso 68 kg»).`}>
+            <MenuRow
+              icon="user-rounded-bold-duotone"
+              tint="gray"
+              label="Nome"
+              value={profile.name}
+              chevron
+              onPress={() => router.push('/profile')}
+            />
+            <MenuRow
+              icon={goalIcons[profile.goal].icon}
+              tint={goalIcons[profile.goal].tint}
+              label="Obiettivo"
+              value={goalLabels[profile.goal]}
+              chevron
+              onPress={() => router.push('/profile')}
+            />
+            <MenuRow
+              icon={dietIcons[profile.diet].icon}
+              tint={dietIcons[profile.diet].tint}
+              label="Alimentazione"
+              value={dietLabels[profile.diet]}
+              chevron
+              onPress={() => router.push('/profile')}
+            />
+            <MenuRow
+              icon="forbidden-circle-bold-duotone"
+              tint="rose"
+              label="Evito"
+              value={profile.avoid.length ? profile.avoid.join(', ') : 'Nulla'}
+              chevron
+              onPress={() => router.push('/profile')}
+            />
+            <MenuRow
+              icon="scale-bold-duotone"
+              tint="blue"
+              label="Peso"
+              value={profile.weight ? `${profile.weight} kg` : 'Non indicato'}
+              chevron
+              onPress={() => router.push('/profile')}
+            />
+            <MenuRow
+              icon={activityIcons[profile.activity].icon}
+              tint={activityIcons[profile.activity].tint}
+              label="Attività"
+              value={activityLabels[profile.activity]}
+              chevron
+              onPress={() => router.push('/profile')}
+            />
+          </MenuGroup>
+        )}
 
         <MenuGroup
           title="Piano pasti"

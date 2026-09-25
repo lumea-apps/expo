@@ -26,12 +26,12 @@ This is an **Expo SDK 54** project using **Expo Router** for file-based routing,
 The whole product is a conversation; data screens are secondary. See `README.md` for the product/design overview.
 
 - `app/index.tsx` - Chat home (redirects to `/onboarding` until a profile exists)
-- `app/onboarding.tsx` - Conversational onboarding (name → goal → diet → avoid → weight → activity → targets reveal)
+- `app/onboarding.tsx` - Conversational onboarding (name → goal → diet → avoid → weight → activity → targets reveal). Done once: answers are saved step by step (`onboardingDraft`), the profile is saved when the targets are revealed, and the route redirects to chat when a profile already exists (only "Ricomincia da capo" in Profile starts it again)
 - `app/today.tsx` - "Oggi" modal: rings, macro bars, water, meal timeline
 - `app/profile.tsx` - Profile, AI engine status, demo/reset actions
 - `app/voice.tsx` - Voice mode (Web Speech API on web, keyboard dictation on native, TTS via `expo-speech`)
 - `app/search.tsx` - Quick nutrition search: built-in foods instantly, Open Food Facts products by name or barcode (`components/food/BarcodeScanner.tsx`, stubbed on web)
-- `app/memory.tsx` - Memory: on/off switch, shortcuts, liked/disliked foods, habits
+- `app/memory.tsx` - Memory: on/off switch, the onboarding profile, meal plan defaults, shortcuts, liked/disliked foods, habits
 - `app/meal-plan.tsx` - Daily or weekly meal plan: create (day/tomorrow/week × focus, defaults from `planPrefs`), mark eaten, swap a dish, grocery list, saved plans (reuse)
 - `app/_layout.tsx` - Root layout (Geist fonts, light theme, splash, stack/modals)
 

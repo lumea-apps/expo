@@ -14,13 +14,17 @@ import type {
   MemoryChange,
   MemoryKind,
   MemoryNote,
+  OnboardingDraft,
   PlanPrefs,
   Profile,
   Shortcut,
 } from './types';
 
 interface NouriState {
+  /** Set at the end of onboarding (its `createdAt` is when it was completed). */
   profile: Profile | null;
+  /** Answers of an onboarding still in progress. */
+  onboardingDraft: OnboardingDraft | null;
   meals: Meal[];
   water: Record<string, number>;
   messages: ChatMessage[];
@@ -51,6 +55,7 @@ interface NouriState {
   fresh: Record<string, true>;
 
   setProfile: (p: Profile) => void;
+  setOnboardingDraft: (d: OnboardingDraft | null) => void;
   logMeal: (draft: MealDraft, source: Meal['source'], widgetKey?: string, at?: string) => Meal;
   removeMeal: (id: string) => void;
   addWater: (ml: number) => void;
@@ -89,6 +94,7 @@ export const useNouri = create<NouriState>()(
   persist(
     (set, get) => ({
       profile: null,
+      onboardingDraft: null,
       meals: [],
       water: {},
       messages: [],
@@ -108,7 +114,9 @@ export const useNouri = create<NouriState>()(
       thinking: false,
       fresh: {},
 
-      setProfile: (profile) => set({ profile }),
+      setProfile: (profile) => set({ profile, onboardingDraft: null }),
+
+      setOnboardingDraft: (onboardingDraft) => set({ onboardingDraft }),
 
       logMeal: (draft, source, widgetKey, at) => {
         const meal: Meal = { ...draft, id: uid(), at: at ?? new Date().toISOString(), source };
@@ -368,6 +376,7 @@ export const useNouri = create<NouriState>()(
           recentFoods: [],
           lastBrief: null,
           profile: null,
+          onboardingDraft: null,
           meals: [],
           water: {},
           messages: [],
@@ -381,6 +390,7 @@ export const useNouri = create<NouriState>()(
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({
         profile: s.profile,
+        onboardingDraft: s.onboardingDraft,
         meals: s.meals,
         water: s.water,
         logged: s.logged,

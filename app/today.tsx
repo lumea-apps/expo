@@ -1,28 +1,24 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { MessageCircle, Trash2, X } from 'lucide-react-native';
+import { Trash2, X } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Aurora } from '@/components/ui/Aurora';
 import { MacroBar, Rings } from '@/components/ui/MacroRing';
 import { Card, IconButton, PrimaryButton } from '@/components/ui/Surface';
-import { Mono, Sans, Serif } from '@/components/ui/Typography';
+import { Display, Mono, Sans } from '@/components/ui/Typography';
 import { InsightCard, WaterCard } from '@/components/widgets/DataCards';
-import { colors, gradientFor } from '@/constants/theme';
+import { colors, radii } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
-import {
-  dayTotals,
-  formatDateStamp,
-  formatKcal,
-  formatTime,
-  mealsOn,
-  mealTotals,
-} from '@/lib/nutrition';
+import { dayTotals, formatKcal, formatTime, mealsOn, mealTotals } from '@/lib/nutrition';
 import { useNouri } from '@/lib/store';
 import { useAnimatedNumber } from '@/lib/useAnimatedNumber';
 import { useSend } from '@/lib/useSend';
+
+function longDate(d = new Date()): string {
+  const s = d.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 export default function Today() {
   const router = useRouter();
@@ -41,8 +37,8 @@ export default function Today() {
     if (!list.length)
       return {
         tone: 'neutral' as const,
-        title: 'Pagina bianca',
-        body: 'Raccontami il primo pasto e il resto lo costruiamo insieme.',
+        title: 'Ancora niente nel diario',
+        body: 'Racconta a Nouri il primo pasto, anche solo “cappuccino e cornetto”.',
       };
     const p = t.protein / T.protein;
     const k = t.kcal / T.kcal;
@@ -50,166 +46,147 @@ export default function Today() {
       return {
         tone: 'warning' as const,
         title: 'Giornata piena',
-        body: 'Sei sopra il target: domani colazione proteica e cena leggera, senza sensi di colpa.',
+        body: 'Sei sopra il piano. Domani pasti normali e tanta verdura, niente compensazioni drastiche.',
       };
     if (p >= k)
       return {
         tone: 'positive' as const,
-        title: 'Ottimo equilibrio',
-        body: `Le proteine (${Math.round(p * 100)}%) corrono più delle calorie (${Math.round(k * 100)}%). È il ritmo che ti tiene sazio.`,
+        title: 'Buon equilibrio',
+        body: `Proteine al ${Math.round(p * 100)}% con il ${Math.round(k * 100)}% delle calorie: è il ritmo che ti tiene sazio.`,
       };
     return {
       tone: 'neutral' as const,
       title: 'Spazio per le proteine',
-      body: `Ti mancano ${Math.max(0, T.protein - t.protein)} g di proteine: pesce, legumi, uova o yogurt greco al prossimo pasto.`,
+      body: `Mancano ${Math.max(0, T.protein - t.protein)} g. Al prossimo pasto: pesce, legumi, uova o yogurt greco.`,
     };
   })();
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <Aurora preset="calm" />
       <ScrollView
         contentContainerStyle={{
-          paddingTop: insets.top + 16,
+          paddingTop: insets.top + 12,
           paddingBottom: insets.bottom + 40,
           paddingHorizontal: 20,
         }}>
         <View style={styles.top}>
           <View>
-            <Mono upper size={11}>
-              {formatDateStamp()}
-            </Mono>
-            <Serif size={52} style={{ marginTop: 4 }}>
-              Oggi
-            </Serif>
+            <Display size={28}>Oggi</Display>
+            <Sans size={14} color={colors.faint}>
+              {longDate()}
+            </Sans>
           </View>
-          <IconButton label="Chiudi" onPress={() => router.back()}>
-            <X size={20} color={colors.ink} />
+          <IconButton label="Chiudi" onPress={() => router.back()} style={styles.close}>
+            <X size={18} color={colors.ink} />
           </IconButton>
         </View>
 
         <Animated.View
-          entering={FadeInDown.duration(600)}
-          style={{ alignItems: 'center', marginTop: 12 }}>
+          entering={FadeIn.duration(500)}
+          style={{ alignItems: 'center', marginTop: 20 }}>
           <Rings
-            size={268}
-            stroke={16}
-            gap={5}
+            size={220}
+            stroke={12}
+            gap={4}
             rings={[
-              { progress: t.kcal / T.kcal, color: colors.lime },
+              { progress: t.kcal / T.kcal, color: colors.ink },
               { progress: t.protein / T.protein, color: colors.protein },
               { progress: t.carbs / T.carbs, color: colors.carbs },
               { progress: t.fat / T.fat, color: colors.fat },
             ]}>
-            <Mono upper size={10}>
-              Mangiate
-            </Mono>
             <Mono
-              size={42}
+              size={36}
               weight="medium"
               color={colors.ink}
-              style={{ letterSpacing: -1.5, lineHeight: 50 }}>
+              style={{ letterSpacing: -1.4, lineHeight: 42 }}>
               {formatKcal(eaten)}
             </Mono>
-            <Mono size={11}>DI {formatKcal(T.kcal)} KCAL</Mono>
+            <Sans size={13} color={colors.faint}>
+              di {formatKcal(T.kcal)} kcal
+            </Sans>
           </Rings>
         </Animated.View>
 
         <View style={styles.macros}>
           {[
             { l: 'Proteine', v: t.protein, t: T.protein, c: colors.protein },
-            { l: 'Carbo', v: t.carbs, t: T.carbs, c: colors.carbs },
+            { l: 'Carboidrati', v: t.carbs, t: T.carbs, c: colors.carbs },
             { l: 'Grassi', v: t.fat, t: T.fat, c: colors.fat },
           ].map((m, i) => (
             <View key={m.l} style={{ flex: 1, gap: 6 }}>
-              <Mono upper size={10}>
+              <Sans size={12} color={colors.faint}>
                 {m.l}
-              </Mono>
-              <Mono size={16} weight="medium" color={colors.ink}>
+              </Sans>
+              <Mono size={15} weight="medium" color={colors.ink}>
                 {Math.round(m.v)}
-                <Mono size={11}> / {m.t}g</Mono>
+                <Mono size={12}> / {m.t} g</Mono>
               </Mono>
               <MacroBar progress={m.v / m.t} color={m.c} delay={300 + i * 100} />
             </View>
           ))}
         </View>
 
-        <View style={{ marginTop: 22 }}>
+        <View style={{ marginTop: 24 }}>
           <WaterCard />
         </View>
 
-        <Serif size={30} style={{ marginTop: 30, marginBottom: 14 }}>
-          Il tuo{' '}
-          <Serif size={30} italic color={colors.lime}>
-            diario
-          </Serif>
-        </Serif>
-
+        <Sans size={15} weight="semi" style={{ marginTop: 28, marginBottom: 10 }}>
+          Diario
+        </Sans>
         {list.length === 0 ? (
-          <Card style={{ padding: 20, alignItems: 'center' }}>
-            <Sans size={30}>🍽️</Sans>
-            <Sans size={14} color={colors.dim} center style={{ marginTop: 8 }}>
-              Ancora niente qui. Scrivi a Nouri cosa hai mangiato, o mandagli una foto.
+          <Card style={{ padding: 18 }}>
+            <Sans size={14} color={colors.dim}>
+              Ancora niente qui. Scrivi a Nouri cosa hai mangiato o mandagli una foto.
             </Sans>
           </Card>
         ) : (
-          <View>
+          <Card>
             {list.map((m, i) => {
               const mt = mealTotals(m);
-              const [g1, g2] = gradientFor(m.title);
               return (
                 <Animated.View
                   key={m.id}
                   layout={LinearTransition}
-                  entering={FadeInDown.delay(i * 70)}
-                  style={styles.timelineRow}>
-                  <View style={styles.rail}>
-                    <View style={styles.dot} />
-                    {i < list.length - 1 && <View style={styles.line} />}
+                  style={[styles.meal, i > 0 && styles.divider]}>
+                  <Mono size={12} style={{ width: 40 }}>
+                    {formatTime(m.at)}
+                  </Mono>
+                  <View style={styles.tile}>
+                    <Sans size={17}>{m.emoji}</Sans>
                   </View>
-                  <Card style={styles.meal}>
-                    <LinearGradient
-                      colors={[g1, g2]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.tile}>
-                      <Sans size={22}>{m.emoji}</Sans>
-                    </LinearGradient>
-                    <View style={{ flex: 1 }}>
-                      <Mono size={10} upper>
-                        {formatTime(m.at)} · {m.label}
-                      </Mono>
-                      <Sans size={15} weight="semi" numberOfLines={1} style={{ marginTop: 2 }}>
-                        {m.title}
-                      </Sans>
-                      <Mono size={11} color={colors.dim} style={{ marginTop: 2 }}>
-                        {mt.kcal} kcal · P{mt.protein} C{mt.carbs} G{mt.fat}
-                      </Mono>
-                    </View>
-                    <Pressable
-                      accessibilityLabel="Elimina pasto"
-                      hitSlop={10}
-                      onPress={() => {
-                        haptic.tap();
-                        removeMeal(m.id);
-                      }}>
-                      <Trash2 size={16} color={colors.faint} />
-                    </Pressable>
-                  </Card>
+                  <View style={{ flex: 1 }}>
+                    <Sans size={14} weight="medium" numberOfLines={1}>
+                      {m.title}
+                    </Sans>
+                    <Sans size={12} color={colors.faint}>
+                      {m.label} · P {mt.protein} · C {mt.carbs} · G {mt.fat}
+                    </Sans>
+                  </View>
+                  <Mono size={13} color={colors.ink}>
+                    {formatKcal(mt.kcal)}
+                  </Mono>
+                  <Pressable
+                    accessibilityLabel="Elimina pasto"
+                    hitSlop={10}
+                    onPress={() => {
+                      haptic.tap();
+                      removeMeal(m.id);
+                    }}>
+                    <Trash2 size={15} color={colors.faint} />
+                  </Pressable>
                 </Animated.View>
               );
             })}
-          </View>
+          </Card>
         )}
 
-        <View style={{ marginTop: 22 }}>
+        <View style={{ marginTop: 16 }}>
           <InsightCard tone={note.tone} title={note.title} body={note.body} />
         </View>
 
         <PrimaryButton
           label="Parlane con Nouri"
-          icon={<MessageCircle size={18} color={colors.onAccent} />}
-          style={{ marginTop: 22 }}
+          style={{ marginTop: 20 }}
           onPress={() => {
             router.back();
             setTimeout(() => send({ text: 'Com’è andata oggi?' }), 350);
@@ -222,25 +199,22 @@ export default function Today() {
 
 const styles = StyleSheet.create({
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  macros: { flexDirection: 'row', gap: 16, marginTop: 24 },
-  timelineRow: { flexDirection: 'row', gap: 12 },
-  rail: { width: 12, alignItems: 'center', paddingTop: 22 },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.lime,
-    borderWidth: 2,
-    borderColor: colors.bg,
-  },
-  line: { flex: 1, width: 1, backgroundColor: colors.borderStrong, marginTop: 4 },
+  close: { backgroundColor: colors.bgMuted },
+  macros: { flexDirection: 'row', gap: 16, marginTop: 28 },
   meal: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    padding: 12,
-    marginBottom: 10,
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
-  tile: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  divider: { borderTopWidth: 1, borderColor: colors.border },
+  tile: {
+    width: 34,
+    height: 34,
+    borderRadius: radii.sm,
+    backgroundColor: colors.bgSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

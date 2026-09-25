@@ -1,6 +1,6 @@
 import * as Speech from 'expo-speech';
 import { useRouter } from 'expo-router';
-import { ArrowUp, Keyboard, Mic, Square, X } from 'lucide-react-native';
+import { ArrowUp, Mic, Square, X } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -13,11 +13,10 @@ import {
 import Animated, { FadeIn, FadeInDown, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Aurora } from '@/components/ui/Aurora';
 import { Orb, type OrbState } from '@/components/ui/Orb';
-import { Chip, Glass, IconButton } from '@/components/ui/Surface';
-import { Mono, Serif } from '@/components/ui/Typography';
-import { colors, fonts } from '@/constants/theme';
+import { Chip, IconButton } from '@/components/ui/Surface';
+import { Display, Sans } from '@/components/ui/Typography';
+import { colors, fonts, radii } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
 import { useSpeechInput } from '@/lib/useSpeechInput';
 import { plain, speak, useSend } from '@/lib/useSend';
@@ -74,14 +73,14 @@ export default function Voice() {
 
   const label =
     state === 'listening'
-      ? 'Ti ascolto…'
+      ? 'Ti ascolto'
       : state === 'thinking'
-        ? 'Ci penso…'
+        ? 'Ci penso'
         : state === 'speaking'
           ? 'Nouri sta parlando'
           : mic.supported
-            ? 'Tocca e parla'
-            : 'Detta con il microfono della tastiera';
+            ? 'Tocca il microfono e parla'
+            : 'Scrivi o detta la tua domanda';
 
   const toggleMic = () => {
     haptic.tap();
@@ -96,58 +95,50 @@ export default function Voice() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <Aurora preset="vivid" />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={[styles.top, { paddingTop: insets.top + 12 }]}>
-          <IconButton label="Chiudi" onPress={() => router.back()}>
-            <X size={20} color={colors.ink} />
-          </IconButton>
-          <Mono upper size={11}>
+          <Sans size={15} weight="semi">
+            Nouri
+          </Sans>
+          <Sans size={13} color={colors.faint}>
             Modalità voce
-          </Mono>
-          <IconButton label="Torna alla chat" onPress={() => router.back()}>
-            <Keyboard size={18} color={colors.ink} />
-          </IconButton>
+          </Sans>
         </View>
 
         <View style={styles.center}>
           <Pressable onPress={mic.supported ? toggleMic : undefined}>
-            <Orb size={236} state={state} level={level} />
+            <Orb size={220} state={state} level={level} />
           </Pressable>
-          <Animated.View key={state} entering={FadeIn.duration(300)} style={{ marginTop: 36 }}>
-            <Mono upper size={12} color={state === 'listening' ? colors.lime : colors.faint} center>
+          <Animated.View key={state} entering={FadeIn.duration(300)} style={{ marginTop: 40 }}>
+            <Sans size={14} color={state === 'listening' ? colors.ink : colors.faint} center>
               {label}
-            </Mono>
+            </Sans>
           </Animated.View>
 
           <View style={styles.transcript}>
             {mic.listening || (heard && !reply) ? (
-              <Serif size={30} center color={colors.dim}>
-                {mic.listening ? mic.transcript || '…' : `“${heard}”`}
-              </Serif>
+              <Display size={22} center muted={!mic.listening}>
+                {mic.listening ? mic.transcript || '…' : heard}
+              </Display>
             ) : reply ? (
-              <Animated.View entering={FadeInDown.duration(500)}>
-                <Serif size={26} center>
+              <Animated.View entering={FadeInDown.duration(400)}>
+                <Display size={20} center style={{ lineHeight: 28 }}>
                   {reply}
-                </Serif>
+                </Display>
                 <Pressable
                   onPress={() => router.back()}
-                  style={{ marginTop: 16, alignSelf: 'center' }}>
-                  <Mono upper size={11} color={colors.lime}>
-                    Vedi le card in chat →
-                  </Mono>
+                  style={{ marginTop: 14, alignSelf: 'center' }}>
+                  <Sans size={13} weight="medium" color={colors.dim}>
+                    Vedi i dettagli in chat
+                  </Sans>
                 </Pressable>
               </Animated.View>
             ) : (
-              <Serif size={30} center color={colors.dim}>
-                Dimmi cosa hai mangiato, o chiedimi{' '}
-                <Serif size={30} italic color={colors.ink}>
-                  cosa cucinare
-                </Serif>
-                .
-              </Serif>
+              <Display size={22} center muted>
+                Dimmi cosa hai mangiato o chiedimi cosa cucinare.
+              </Display>
             )}
           </View>
         </View>
@@ -160,34 +151,12 @@ export default function Voice() {
               ))}
             </View>
           )}
-          {mic.supported ? (
-            <Pressable
-              onPress={toggleMic}
-              disabled={state === 'thinking'}
-              style={({ pressed }) => [pressed && { transform: [{ scale: 0.94 }] }]}>
-              <View
-                style={[
-                  styles.micBtn,
-                  mic.listening && { backgroundColor: colors.lime },
-                  state === 'thinking' && { opacity: 0.4 },
-                ]}>
-                {mic.listening || state === 'speaking' ? (
-                  <Square
-                    size={24}
-                    color={mic.listening ? colors.onAccent : colors.ink}
-                    fill={mic.listening ? colors.onAccent : colors.ink}
-                  />
-                ) : (
-                  <Mic size={28} color={colors.ink} />
-                )}
-              </View>
-            </Pressable>
-          ) : (
-            <Glass radius={30} intensity={50} style={styles.inputBar}>
+          {!mic.supported && (
+            <View style={styles.inputBar}>
               <TextInput
                 value={typed}
                 onChangeText={setTyped}
-                placeholder="Tocca 🎙️ sulla tastiera e parla"
+                placeholder="Detta con il microfono della tastiera"
                 placeholderTextColor={colors.faint}
                 style={styles.input}
                 returnKeyType="send"
@@ -199,14 +168,45 @@ export default function Voice() {
               <IconButton
                 label="Invia"
                 filled
+                size={36}
+                disabled={!typed.trim()}
                 onPress={() => {
                   if (typed.trim()) ask(typed.trim());
                   setTyped('');
                 }}>
-                <ArrowUp size={20} color={colors.onAccent} />
+                <ArrowUp size={18} color={typed.trim() ? colors.onAccent : colors.faint} />
               </IconButton>
-            </Glass>
+            </View>
           )}
+          <View style={styles.controls}>
+            <Pressable
+              accessibilityLabel="Chiudi la modalità voce"
+              onPress={() => {
+                haptic.tap();
+                router.back();
+              }}
+              style={({ pressed }) => [styles.round, pressed && { opacity: 0.7 }]}>
+              <X size={22} color={colors.ink} />
+            </Pressable>
+            {mic.supported && (
+              <Pressable
+                accessibilityLabel={mic.listening ? 'Smetti di ascoltare' : 'Parla'}
+                onPress={toggleMic}
+                disabled={state === 'thinking'}
+                style={({ pressed }) => [
+                  styles.round,
+                  styles.mic,
+                  state === 'thinking' && { opacity: 0.35 },
+                  pressed && { opacity: 0.8 },
+                ]}>
+                {mic.listening || state === 'speaking' ? (
+                  <Square size={20} color={colors.onAccent} fill={colors.onAccent} />
+                ) : (
+                  <Mic size={24} color={colors.onAccent} />
+                )}
+              </Pressable>
+            )}
+          </View>
         </View>
       </KeyboardAvoidingView>
     </View>
@@ -214,32 +214,31 @@ export default function Voice() {
 }
 
 const styles = StyleSheet.create({
-  top: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-  },
+  top: { alignItems: 'center', gap: 2, paddingHorizontal: 16 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
-  transcript: { minHeight: 150, marginTop: 20, justifyContent: 'flex-start' },
+  transcript: { minHeight: 130, marginTop: 14, justifyContent: 'flex-start' },
   bottom: { alignItems: 'center', gap: 18, paddingHorizontal: 16 },
   prompts: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8 },
-  micBtn: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
+  controls: { flexDirection: 'row', gap: 20, alignItems: 'center' },
+  round: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.cardStrong,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
+    backgroundColor: colors.bgMuted,
   },
+  mic: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.ink },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 6,
+    height: 52,
     paddingLeft: 18,
+    paddingRight: 8,
     alignSelf: 'stretch',
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
   },
   input: {
     flex: 1,

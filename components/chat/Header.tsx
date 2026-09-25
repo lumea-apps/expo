@@ -5,14 +5,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Rings } from '@/components/ui/MacroRing';
 import { Orb } from '@/components/ui/Orb';
-import { Glass } from '@/components/ui/Surface';
-import { Mono, Sans, Serif } from '@/components/ui/Typography';
-import { colors } from '@/constants/theme';
+import { Mono, Sans } from '@/components/ui/Typography';
+import { colors, radii } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
 import { dayTotals, formatKcal } from '@/lib/nutrition';
 import { useNouri } from '@/lib/store';
 
-/** Floating top bar: Nouri's mark, the live "day pulse" pill and the profile avatar. */
+/** Top bar: wordmark, today's calories (opens "Oggi") and the profile avatar. */
 export function ChatHeader() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -26,16 +25,16 @@ export function ChatHeader() {
     <View pointerEvents="box-none" style={[styles.wrap, { paddingTop: insets.top + 8 }]}>
       <LinearGradient
         pointerEvents="none"
-        colors={[colors.bg, 'rgba(8,8,12,0.94)', 'rgba(8,8,12,0)']}
-        locations={[0, 0.6, 1]}
+        colors={[colors.bg, colors.bg, 'rgba(255,255,255,0)']}
+        locations={[0, 0.7, 1]}
         style={StyleSheet.absoluteFill}
       />
       <View style={styles.row}>
         <View style={styles.brand}>
-          <Orb size={30} glow={false} state={thinking ? 'thinking' : 'idle'} />
-          <Serif size={28} italic>
+          <Orb size={22} shadow={false} state={thinking ? 'thinking' : 'idle'} />
+          <Sans size={18} weight="semi" style={{ letterSpacing: -0.4 }}>
             Nouri
-          </Serif>
+          </Sans>
         </View>
 
         <Pressable
@@ -44,24 +43,19 @@ export function ChatHeader() {
             haptic.tap();
             router.push('/today');
           }}
-          style={({ pressed }) => [pressed && { transform: [{ scale: 0.96 }] }]}>
-          <Glass radius={999} style={styles.pulse}>
-            {T && (
-              <Rings
-                size={26}
-                stroke={3.5}
-                gap={1.5}
-                rings={[
-                  { progress: t.kcal / T.kcal, color: colors.lime },
-                  { progress: t.protein / T.protein, color: colors.protein },
-                ]}
-              />
-            )}
-            <Mono size={13} weight="medium" color={colors.ink}>
-              {formatKcal(t.kcal)}
-            </Mono>
-            <Mono size={11}>/ {T ? formatKcal(T.kcal) : '—'}</Mono>
-          </Glass>
+          style={({ pressed }) => [styles.pulse, pressed && { backgroundColor: colors.bgMuted }]}>
+          {T && (
+            <Rings
+              size={20}
+              stroke={3}
+              gap={0}
+              rings={[{ progress: t.kcal / T.kcal, color: colors.ink }]}
+            />
+          )}
+          <Mono size={13} weight="medium" color={colors.ink}>
+            {formatKcal(t.kcal)}
+          </Mono>
+          <Mono size={12}>/ {T ? formatKcal(T.kcal) : '—'}</Mono>
         </Pressable>
 
         <Pressable
@@ -69,16 +63,11 @@ export function ChatHeader() {
           onPress={() => {
             haptic.tap();
             router.push('/profile');
-          }}>
-          <LinearGradient
-            colors={[colors.carbs, colors.protein]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.avatar}>
-            <Sans size={15} weight="bold" color={colors.onAccent}>
-              {(profile?.name ?? 'N').charAt(0).toUpperCase()}
-            </Sans>
-          </LinearGradient>
+          }}
+          style={({ pressed }) => [styles.avatar, pressed && { opacity: 0.7 }]}>
+          <Sans size={14} weight="semi">
+            {(profile?.name ?? 'N').charAt(0).toUpperCase()}
+          </Sans>
         </Pressable>
       </View>
     </View>
@@ -92,24 +81,29 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: 16,
-    paddingBottom: 30,
+    paddingBottom: 20,
     zIndex: 10,
   },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   brand: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
   pulse: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingLeft: 6,
-    paddingRight: 14,
-    height: 40,
+    gap: 7,
+    paddingLeft: 8,
+    paddingRight: 12,
+    height: 36,
+    borderRadius: radii.pill,
+    backgroundColor: colors.bgSubtle,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.bgMuted,
   },
 });

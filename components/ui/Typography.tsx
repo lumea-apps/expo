@@ -20,21 +20,21 @@ function base(
   };
 }
 
-/** Editorial display type (Instrument Serif). */
-export function Serif({
-  size = 34,
-  color = colors.ink,
-  italic,
+/** Headlines: Geist Medium with tight tracking. `muted` gives the grey second half of two-tone titles. */
+export function Display({
+  size = 32,
+  color,
+  muted,
   center,
   style,
   ...rest
-}: Props & { italic?: boolean }) {
+}: Props & { muted?: boolean }) {
   return (
     <Text
       {...rest}
       style={[
-        base(size, color, italic ? fonts.serifItalic : fonts.serif, 1.08, center),
-        { letterSpacing: -0.3 },
+        base(size, color ?? (muted ? colors.faint : colors.ink), fonts.sansMedium, 1.12, center),
+        { letterSpacing: -size * 0.03 },
         style,
       ]}
     />
@@ -48,7 +48,7 @@ const sansWeights = {
   bold: fonts.sansBold,
 } as const;
 
-/** UI / body type (Inter Tight). */
+/** UI and body text (Geist). */
 export function Sans({
   size = 15,
   color = colors.ink,
@@ -57,10 +57,15 @@ export function Sans({
   style,
   ...rest
 }: Props & { weight?: keyof typeof sansWeights }) {
-  return <Text {...rest} style={[base(size, color, sansWeights[weight], 1.45, center), style]} />;
+  return (
+    <Text
+      {...rest}
+      style={[base(size, color, sansWeights[weight], 1.45, center), { letterSpacing: -0.1 }, style]}
+    />
+  );
 }
 
-/** Numbers, labels, timestamps (JetBrains Mono). */
+/** Numbers and small labels: Geist with tabular figures so digits line up. */
 export function Mono({
   size = 11,
   color = colors.faint,
@@ -75,7 +80,8 @@ export function Mono({
       {...rest}
       style={[
         base(size, color, weight === 'medium' ? fonts.monoMedium : fonts.mono, 1.3, center),
-        upper && { textTransform: 'uppercase', letterSpacing: 1.2 },
+        { fontVariant: ['tabular-nums'] },
+        upper && { textTransform: 'uppercase', letterSpacing: 0.6 },
         style,
       ]}
     />

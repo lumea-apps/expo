@@ -10,10 +10,7 @@ export interface RingSpec {
   color: string;
 }
 
-/**
- * Concentric progress rings (outermost first). Each ring draws a faint track,
- * a soft halo and a round-capped arc that animates on change.
- */
+/** Concentric progress rings (outermost first) on a light track, animated on change. */
 export function Rings({
   size,
   stroke = 10,
@@ -66,7 +63,7 @@ function Arc({
   const p = useAnimatedNumber(Math.max(0, Math.min(1, spec.progress)), 1100, delay);
   const r = size / 2 - stroke / 2 - inset;
   const c = 2 * Math.PI * r;
-  const len = Math.max(0.0001, p) * c;
+  const len = p * c;
   return (
     <>
       <Circle
@@ -74,31 +71,21 @@ function Arc({
         cy={size / 2}
         r={r}
         stroke={colors.ghost}
-        strokeOpacity={0.6}
         strokeWidth={stroke}
         fill="none"
       />
-      <Circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        stroke={spec.color}
-        strokeOpacity={0.18}
-        strokeWidth={stroke + 6}
-        strokeDasharray={`${len} ${c}`}
-        strokeLinecap="round"
-        fill="none"
-      />
-      <Circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        stroke={spec.color}
-        strokeWidth={stroke}
-        strokeDasharray={`${len} ${c}`}
-        strokeLinecap="round"
-        fill="none"
-      />
+      {len > 0.5 && (
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          stroke={spec.color}
+          strokeWidth={stroke}
+          strokeDasharray={`${len} ${c}`}
+          strokeLinecap="round"
+          fill="none"
+        />
+      )}
     </>
   );
 }
@@ -107,7 +94,7 @@ function Arc({
 export function MacroBar({
   progress,
   color,
-  height = 6,
+  height = 4,
   delay = 0,
 }: {
   progress: number;

@@ -1,8 +1,10 @@
 import { StyleSheet, View } from 'react-native';
 
-import { Mono } from '@/components/ui/Typography';
+import { Sans } from '@/components/ui/Typography';
 import { colors } from '@/constants/theme';
-import { dayKey, formatDateStamp } from '@/lib/nutrition';
+import { dayKey } from '@/lib/nutrition';
+
+const DAYS = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
 
 function label(iso: string): string {
   const key = dayKey(iso);
@@ -10,23 +12,22 @@ function label(iso: string): string {
   const y = new Date();
   y.setDate(y.getDate() - 1);
   if (key === dayKey(y)) return 'Ieri';
-  return formatDateStamp(new Date(iso));
+  const d = new Date(iso);
+  const name = DAYS[d.getDay()];
+  return `${name.charAt(0).toUpperCase()}${name.slice(1)} ${d.getDate()}`;
 }
 
-/** Thin rule with the day name, shown where the conversation crosses midnight. */
+/** Centred day label where the conversation crosses midnight. */
 export function DayDivider({ at }: { at: string }) {
   return (
     <View style={styles.row}>
-      <View style={styles.line} />
-      <Mono upper size={10}>
+      <Sans size={12} weight="medium" color={colors.faint}>
         {label(at)}
-      </Mono>
-      <View style={styles.line} />
+      </Sans>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  line: { flex: 1, height: 1, backgroundColor: colors.border },
+  row: { alignItems: 'center', paddingVertical: 4 },
 });

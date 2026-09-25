@@ -10,7 +10,6 @@ import { Greeting } from '@/components/chat/Greeting';
 import { ChatHeader } from '@/components/chat/Header';
 import { MessageView } from '@/components/chat/MessageView';
 import { Thinking } from '@/components/chat/Thinking';
-import { Aurora } from '@/components/ui/Aurora';
 import { colors } from '@/constants/theme';
 import type { UserInput } from '@/lib/ai';
 import { dailyBrief } from '@/lib/ai/local';
@@ -93,7 +92,6 @@ export default function ChatScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <Aurora preset="chat" />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -101,8 +99,9 @@ export default function ChatScreen() {
           ref={scroll}
           style={{ flex: 1 }}
           contentContainerStyle={{
-            paddingTop: insets.top + 76,
-            paddingBottom: insets.bottom + (suggestions.length ? 150 : 104),
+            flexGrow: 1,
+            paddingTop: insets.top + 68,
+            paddingBottom: insets.bottom + (suggestions.length ? 140 : 96),
             paddingHorizontal: 20,
             gap: 22,
           }}
@@ -117,10 +116,10 @@ export default function ChatScreen() {
           onContentSizeChange={() => {
             if (stick.current && messages.length) toEnd();
           }}>
-          <Greeting compact={messages.length > 0} onSend={sendText} onPhoto={sendPhoto} />
+          {messages.length === 0 && !thinking && <Greeting onSend={sendText} onPhoto={sendPhoto} />}
           {messages.map((m, i) => (
             <Fragment key={m.id}>
-              {i > 0 && dayKey(m.at) !== dayKey(messages[i - 1].at) && <DayDivider at={m.at} />}
+              {(i === 0 || dayKey(m.at) !== dayKey(messages[i - 1].at)) && <DayDivider at={m.at} />}
               <MessageView
                 message={m}
                 afterPhoto={m.role === 'assistant' && Boolean(messages[i - 1]?.imageUri)}
@@ -136,7 +135,8 @@ export default function ChatScreen() {
           style={[styles.bottom, { paddingBottom: insets.bottom + 10 }]}>
           <LinearGradient
             pointerEvents="none"
-            colors={['rgba(8,8,12,0)', 'rgba(8,8,12,0.9)', colors.bg]}
+            colors={['rgba(255,255,255,0)', colors.bg, colors.bg]}
+            locations={[0, 0.35, 1]}
             style={StyleSheet.absoluteFill}
           />
           <Composer suggestions={suggestions} disabled={thinking} onSend={sendInput} />

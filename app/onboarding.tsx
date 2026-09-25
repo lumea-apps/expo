@@ -1,16 +1,22 @@
 import { useRouter } from 'expo-router';
-import { ArrowRight, ArrowUp } from 'lucide-react-native';
+import { ArrowUp, Check } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, TextInput, View } from 'react-native';
-import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Rings } from '@/components/ui/MacroRing';
+import { MacroBar } from '@/components/ui/MacroRing';
 import { Orb, type OrbState } from '@/components/ui/Orb';
-import { Aurora } from '@/components/ui/Aurora';
-import { Chip, Glass, IconButton, PrimaryButton } from '@/components/ui/Surface';
-import { Mono, Sans, Serif } from '@/components/ui/Typography';
-import { colors, fonts } from '@/constants/theme';
+import { Chip, IconButton, PrimaryButton } from '@/components/ui/Surface';
+import { Display, Mono, Sans } from '@/components/ui/Typography';
+import { colors, fonts, radii } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
 import {
   AVOID_OPTIONS,
@@ -47,7 +53,7 @@ export default function Onboarding() {
     setTimeout(() => {
       setStep((s) => ORDER[Math.min(ORDER.indexOf(s) + 1, ORDER.length - 1)]);
       setOrb('idle');
-    }, 450);
+    }, 380);
   };
 
   const idx = ORDER.indexOf(step);
@@ -70,23 +76,18 @@ export default function Onboarding() {
     router.replace('/');
   };
 
-  const QUESTIONS: Record<Step, [string, string, string?]> = {
-    name: [
-      'Ciao, sono ',
-      'Nouri.',
-      ' Parliamo di cibo come si parla con un amico. Come ti chiami?',
-    ],
-    goal: [`Piacere, ${first}. `, 'Cosa', ' vuoi ottenere mangiando meglio?'],
-    diet: ['Come ', 'mangi', ' di solito?'],
-    avoid: ['C’è qualcosa che ', 'eviti', '?'],
-    weight: ['Quanto ', 'pesi', ', più o meno? Mi serve solo per i conti.'],
-    activity: ['E quanto ti ', 'muovi', ' durante la settimana?'],
-    reveal: ['', '', ''],
+  // [primary sentence, grey follow-up]
+  const QUESTIONS: Record<Exclude<Step, 'reveal'>, [string, string]> = {
+    name: ['Ciao, sono Nouri.', 'Come ti chiami?'],
+    goal: [`Piacere, ${first}.`, 'Cosa vuoi ottenere?'],
+    diet: ['Come mangi', 'di solito?'],
+    avoid: ['C’è qualcosa', 'che eviti?'],
+    weight: ['Quanto pesi, più o meno?', 'Serve solo per i conti.'],
+    activity: ['Quanto ti muovi', 'durante la settimana?'],
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <Aurora preset="vivid" />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -95,11 +96,11 @@ export default function Onboarding() {
             flex: 1,
             paddingTop: insets.top + 16,
             paddingBottom: insets.bottom + 16,
-            paddingHorizontal: 22,
+            paddingHorizontal: 20,
           }}>
           <View style={styles.progress}>
             {ORDER.slice(0, -1).map((s, i) => (
-              <View key={s} style={[styles.dash, i <= idx && { backgroundColor: colors.lime }]} />
+              <View key={s} style={[styles.dash, i <= idx && { backgroundColor: colors.ink }]} />
             ))}
           </View>
 
@@ -107,26 +108,25 @@ export default function Onboarding() {
             <Reveal name={first} targets={targets} onDone={finish} />
           ) : (
             <>
-              <View style={{ alignItems: 'center', marginTop: 36, marginBottom: 36 }}>
-                <Orb size={step === 'name' ? 170 : 120} state={orb} />
-              </View>
-              <Animated.View key={step} entering={FadeInDown.duration(500)} style={{ flex: 1 }}>
-                <Mono upper size={11}>
-                  {String(idx + 1).padStart(2, '0')} / {String(ORDER.length - 1).padStart(2, '0')}
-                </Mono>
-                <Serif size={38} style={{ marginTop: 10 }}>
-                  {QUESTIONS[step][0]}
-                  <Serif size={38} italic color={colors.lime}>
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                <Orb size={step === 'name' ? 132 : 104} state={orb} />
+                <Animated.View
+                  key={step}
+                  entering={FadeInDown.duration(420)}
+                  style={{ marginTop: 36, alignSelf: 'stretch' }}>
+                  <Display size={28} center>
+                    {QUESTIONS[step][0]}
+                  </Display>
+                  <Display size={28} muted center>
                     {QUESTIONS[step][1]}
-                  </Serif>
-                  {QUESTIONS[step][2]}
-                </Serif>
-              </Animated.View>
+                  </Display>
+                </Animated.View>
+              </View>
 
               <Animated.View
                 key={`${step}-a`}
-                entering={FadeInUp.delay(250).springify().damping(18)}
-                style={{ gap: 14 }}>
+                entering={FadeInDown.delay(180).duration(420)}
+                style={{ gap: 12 }}>
                 {step === 'name' && (
                   <InputBar
                     value={name}
@@ -136,7 +136,7 @@ export default function Onboarding() {
                   />
                 )}
                 {step === 'goal' && (
-                  <ChoiceGrid
+                  <ChoiceList
                     options={Object.entries(goalLabels) as [Goal, string][]}
                     onPick={(v) => {
                       setGoal(v);
@@ -145,7 +145,7 @@ export default function Onboarding() {
                   />
                 )}
                 {step === 'diet' && (
-                  <ChoiceGrid
+                  <ChoiceList
                     options={Object.entries(dietLabels) as [Diet, string][]}
                     onPick={(v) => {
                       setDiet(v);
@@ -164,17 +164,14 @@ export default function Onboarding() {
                           onPress={() =>
                             setAvoid((l) => (l.includes(a) ? l.filter((x) => x !== a) : [...l, a]))
                           }
+                          style={{ height: 40 }}
                         />
                       ))}
                     </View>
                     <PrimaryButton
-                      label={
-                        avoid.length
-                          ? `Evito ${avoid.length === 1 ? avoid[0].toLowerCase() : `${avoid.length} cose`}`
-                          : 'Mangio di tutto'
-                      }
-                      icon={<ArrowRight size={18} color={colors.onAccent} />}
+                      label={avoid.length ? 'Continua' : 'Mangio di tutto'}
                       onPress={next}
+                      style={{ marginTop: 8 }}
                     />
                   </>
                 )}
@@ -183,29 +180,28 @@ export default function Onboarding() {
                     <InputBar
                       value={weight}
                       onChange={setWeight}
-                      placeholder="Es. 68"
+                      placeholder="68"
                       suffix="kg"
                       numeric
                       onSubmit={next}
                     />
-                    <Chip
+                    <PrimaryButton
                       label="Preferisco non dirlo"
+                      variant="outline"
                       onPress={() => {
                         setWeight('');
                         next();
                       }}
-                      style={{ alignSelf: 'flex-start' }}
                     />
                   </>
                 )}
                 {step === 'activity' && (
-                  <ChoiceGrid
+                  <ChoiceList
                     options={[
-                      ['low', `${activityLabels.low} · per lo più seduto`],
-                      ['medium', `${activityLabels.medium} · 2–3 allenamenti`],
-                      ['high', `${activityLabels.high} · sport quasi ogni giorno`],
+                      ['low', `${activityLabels.low}, per lo più seduto`],
+                      ['medium', `${activityLabels.medium}, 2–3 allenamenti`],
+                      ['high', `${activityLabels.high}, sport quasi ogni giorno`],
                     ]}
-                    column
                     onPick={(v) => {
                       setActivity(v as Activity);
                       next();
@@ -237,7 +233,7 @@ function InputBar({
   numeric?: boolean;
 }) {
   return (
-    <Glass radius={30} intensity={50} style={styles.inputBar}>
+    <View style={styles.inputBar}>
       <TextInput
         value={value}
         onChangeText={onChange}
@@ -247,52 +243,53 @@ function InputBar({
         keyboardType={numeric ? 'decimal-pad' : 'default'}
         returnKeyType="next"
         onSubmitEditing={onSubmit}
-        selectionColor={colors.lime}
+        selectionColor={colors.ink}
         style={[styles.input, Platform.OS === 'web' && ({ outlineStyle: 'none' } as object)]}
       />
       {suffix ? (
-        <Mono size={14} color={colors.dim} style={{ marginRight: 8 }}>
+        <Sans size={16} color={colors.faint} style={{ marginRight: 10 }}>
           {suffix}
-        </Mono>
+        </Sans>
       ) : null}
-      <IconButton
-        label="Continua"
-        filled
-        onPress={onSubmit}
-        style={!value.trim() && { opacity: 0.35 }}>
-        <ArrowUp size={20} color={colors.onAccent} strokeWidth={2.5} />
+      <IconButton label="Continua" filled size={38} disabled={!value.trim()} onPress={onSubmit}>
+        <ArrowUp
+          size={18}
+          color={value.trim() ? colors.onAccent : colors.faint}
+          strokeWidth={2.4}
+        />
       </IconButton>
-    </Glass>
+    </View>
   );
 }
 
-function ChoiceGrid<T extends string>({
+function ChoiceList<T extends string>({
   options,
   onPick,
-  column,
 }: {
   options: [T, string][];
   onPick: (v: T) => void;
-  column?: boolean;
 }) {
   const [picked, setPicked] = useState<T | null>(null);
   return (
-    <View style={[styles.wrap, column && { flexDirection: 'column', alignItems: 'stretch' }]}>
-      {options.map(([k, label]) => (
-        <Chip
+    <View style={styles.list}>
+      {options.map(([k, label], i) => (
+        <Pressable
           key={k}
-          label={label}
-          active={picked === k}
           onPress={() => {
+            haptic.select();
             setPicked(k);
             onPick(k);
           }}
-          style={
-            column
-              ? { height: 52, justifyContent: 'flex-start', paddingHorizontal: 18 }
-              : { height: 48, paddingHorizontal: 18 }
-          }
-        />
+          style={({ pressed }) => [
+            styles.option,
+            i > 0 && styles.optionDivider,
+            (pressed || picked === k) && { backgroundColor: colors.bgSubtle },
+          ]}>
+          <Sans size={16} weight="medium">
+            {label}
+          </Sans>
+          {picked === k && <Check size={18} color={colors.ink} strokeWidth={2.2} />}
+        </Pressable>
       ))}
     </View>
   );
@@ -307,10 +304,10 @@ function Reveal({
   targets: ReturnType<typeof computeTargets>;
   onDone: () => void;
 }) {
-  const kcal = useAnimatedNumber(targets.kcal, 1600, 300);
+  const kcal = useAnimatedNumber(targets.kcal, 1400, 250);
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setReady(true), 1400);
+    const t = setTimeout(() => setReady(true), 1100);
     return () => clearTimeout(t);
   }, []);
   const macros = [
@@ -321,7 +318,7 @@ function Reveal({
       share: (targets.protein * 4) / targets.kcal,
     },
     {
-      label: 'Carbo',
+      label: 'Carboidrati',
       v: targets.carbs,
       c: colors.carbs,
       share: (targets.carbs * 4) / targets.kcal,
@@ -330,79 +327,47 @@ function Reveal({
   ];
   return (
     <View style={{ flex: 1, justifyContent: 'space-between' }}>
-      <View>
-        <Animated.View
-          entering={FadeIn.duration(800)}
-          style={{ alignItems: 'center', marginTop: 28 }}>
-          <Orb size={96} state="speaking" />
+      <View style={{ flex: 1, justifyContent: 'center' }}>
+        <Animated.View entering={FadeIn.duration(600)} style={{ alignItems: 'center' }}>
+          <Orb size={88} state="speaking" />
         </Animated.View>
-        <Animated.View entering={FadeInDown.delay(200).duration(600)} style={{ marginTop: 28 }}>
-          <Serif size={38}>
-            Ecco il tuo{' '}
-            <Serif size={38} italic color={colors.lime}>
-              ritmo
-            </Serif>
-            , {name}.
-          </Serif>
-          <Sans size={15} color={colors.dim} style={{ marginTop: 8 }}>
-            Un punto di partenza, non una gabbia. Lo aggiustiamo insieme, parlando.
+        <Animated.View entering={FadeInDown.delay(150).duration(500)} style={{ marginTop: 32 }}>
+          <Display size={28} center>
+            Ecco il tuo piano, {name}.
+          </Display>
+          <Display size={28} muted center>
+            Lo aggiustiamo parlando.
+          </Display>
+        </Animated.View>
+        <Animated.View entering={FadeInDown.delay(300).duration(500)} style={styles.bigNumber}>
+          <Mono
+            size={60}
+            weight="medium"
+            color={colors.ink}
+            style={{ lineHeight: 66, letterSpacing: -2.5 }}>
+            {formatKcal(kcal)}
+          </Mono>
+          <Sans size={14} color={colors.faint}>
+            kcal al giorno · {(targets.water / 1000).toLocaleString('it-IT')} L d’acqua
           </Sans>
         </Animated.View>
-        <Animated.View entering={FadeInDown.delay(400).duration(600)} style={{ marginTop: 26 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
-            <Mono
-              size={72}
-              weight="medium"
-              color={colors.ink}
-              style={{ lineHeight: 78, letterSpacing: -3 }}>
-              {formatKcal(kcal)}
-            </Mono>
-            <Mono size={13} style={{ marginBottom: 14 }}>
-              KCAL / GIORNO
-            </Mono>
-          </View>
-        </Animated.View>
-        <View style={{ flexDirection: 'row', gap: 10, marginTop: 22 }}>
+        <Animated.View entering={FadeInDown.delay(450).duration(500)} style={styles.macroCard}>
           {macros.map((m, i) => (
-            <Animated.View
-              key={m.label}
-              entering={FadeInUp.delay(700 + i * 150).springify()}
-              style={{ flex: 1 }}>
-              <Glass radius={22} style={{ padding: 14, alignItems: 'center', gap: 10 }}>
-                <Rings
-                  size={58}
-                  stroke={6}
-                  rings={[{ progress: m.share * 2, color: m.c }]}
-                  delay={900 + i * 150}>
-                  <Mono size={10} color={colors.ink}>
-                    {Math.round(m.share * 100)}%
-                  </Mono>
-                </Rings>
-                <View style={{ alignItems: 'center' }}>
-                  <Mono size={18} weight="medium" color={colors.ink}>
-                    {m.v}g
-                  </Mono>
-                  <Mono upper size={9}>
-                    {m.label}
-                  </Mono>
-                </View>
-              </Glass>
-            </Animated.View>
+            <View key={m.label} style={{ flex: 1, gap: 8 }}>
+              <Sans size={12} color={colors.faint}>
+                {m.label}
+              </Sans>
+              <Mono size={18} weight="medium" color={colors.ink}>
+                {m.v} g
+              </Mono>
+              <MacroBar progress={m.share * 2} color={m.c} delay={700 + i * 120} />
+            </View>
           ))}
-        </View>
-        <Animated.View entering={FadeIn.delay(1300)} style={{ marginTop: 14 }}>
-          <Mono size={11} center>
-            + {(targets.water / 1000).toLocaleString('it-IT')} L D’ACQUA
-          </Mono>
         </Animated.View>
       </View>
       {ready && (
-        <Animated.View entering={FadeInUp.springify().damping(16)}>
-          <PrimaryButton
-            label="Iniziamo a parlare"
-            icon={<ArrowRight size={18} color={colors.onAccent} />}
-            onPress={onDone}
-          />
+        <Animated.View entering={FadeIn.duration(300)}>
+          <PrimaryButton label="Inizia" onPress={onDone} />
         </Animated.View>
       )}
     </View>
@@ -410,10 +375,20 @@ function Reveal({
 }
 
 const styles = StyleSheet.create({
-  progress: { flexDirection: 'row', gap: 6 },
-  dash: { flex: 1, height: 3, borderRadius: 2, backgroundColor: colors.ghost },
+  progress: { flexDirection: 'row', gap: 4 },
+  dash: { flex: 1, height: 2, borderRadius: 1, backgroundColor: colors.ghost },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  inputBar: { flexDirection: 'row', alignItems: 'center', padding: 6, paddingLeft: 18 },
+  inputBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 56,
+    paddingLeft: 18,
+    paddingRight: 8,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.bg,
+  },
   input: {
     flex: 1,
     position: 'relative',
@@ -421,6 +396,31 @@ const styles = StyleSheet.create({
     height: 48,
     color: colors.ink,
     fontFamily: fonts.sans,
-    fontSize: 18,
+    fontSize: 17,
+  },
+  list: {
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  option: {
+    height: 54,
+    paddingHorizontal: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.bg,
+  },
+  optionDivider: { borderTopWidth: 1, borderColor: colors.border },
+  bigNumber: { alignItems: 'center', marginTop: 34, gap: 2 },
+  macroCard: {
+    flexDirection: 'row',
+    gap: 18,
+    marginTop: 28,
+    padding: 16,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
 });

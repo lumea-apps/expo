@@ -1,5 +1,4 @@
 import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
 import type { ReactNode } from 'react';
 import {
   Platform,
@@ -10,53 +9,45 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { colors, radii } from '@/constants/theme';
+import { colors, radii, shadow } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
 
 import { Sans } from './Typography';
 
-function Sheen({ radius }: { radius: number }) {
-  return (
-    <LinearGradient
-      pointerEvents="none"
-      colors={['rgba(255,255,255,0.09)', 'rgba(255,255,255,0)']}
-      style={[styles.sheen, { borderTopLeftRadius: radius, borderTopRightRadius: radius }]}
-    />
-  );
-}
-
-/** Frosted glass for floating chrome (composer, header, sheets). */
+/** Frosted white for floating chrome (composer, header pill). */
 export function Glass({
   children,
   style,
   radius = radii.lg,
-  intensity = 40,
+  elevated = true,
 }: {
   children?: ReactNode;
   style?: StyleProp<ViewStyle>;
   radius?: number;
-  intensity?: number;
+  elevated?: boolean;
 }) {
   return (
     <View
       style={[
-        { borderRadius: radius, overflow: 'hidden', borderWidth: 1, borderColor: colors.border },
+        { borderRadius: radius, borderWidth: 1, borderColor: colors.border },
+        elevated && shadow,
+        { backgroundColor: 'rgba(255,255,255,0.92)' },
         style,
       ]}>
-      <BlurView
-        intensity={intensity}
-        tint="dark"
-        experimentalBlurMethod={Platform.OS === 'android' ? 'dimezisBlurView' : undefined}
-        style={StyleSheet.absoluteFill}
-      />
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(16,16,22,0.55)' }]} />
-      <Sheen radius={radius} />
+      <View style={[StyleSheet.absoluteFill, { borderRadius: radius, overflow: 'hidden' }]}>
+        <BlurView
+          intensity={30}
+          tint="light"
+          experimentalBlurMethod={Platform.OS === 'android' ? 'dimezisBlurView' : undefined}
+          style={StyleSheet.absoluteFill}
+        />
+      </View>
       {children}
     </View>
   );
 }
 
-/** Lightweight translucent card for content inside scroll views (no blur cost). */
+/** Content card: white with a hairline border. */
 export function Card({
   children,
   style,
@@ -80,7 +71,6 @@ export function Card({
         },
         style,
       ]}>
-      <Sheen radius={radius} />
       {children}
     </View>
   );
@@ -91,7 +81,6 @@ export function Chip({
   onPress,
   active,
   icon,
-  accent,
   style,
 }: {
   label: string;
@@ -109,10 +98,8 @@ export function Chip({
       }}
       style={({ pressed }) => [
         styles.chip,
-        active && { backgroundColor: colors.lime, borderColor: colors.lime },
-        accent &&
-          !active && { borderColor: 'rgba(212,255,58,0.35)', backgroundColor: colors.limeSoft },
-        pressed && { transform: [{ scale: 0.96 }], opacity: 0.85 },
+        active && { backgroundColor: colors.accent, borderColor: colors.accent },
+        pressed && !active && { backgroundColor: colors.bgSubtle },
         style,
       ]}>
       {icon}
@@ -126,10 +113,11 @@ export function Chip({
 export function IconButton({
   children,
   onPress,
-  size = 44,
+  size = 40,
   filled,
   style,
   label,
+  disabled,
 }: {
   children: ReactNode;
   onPress?: () => void;
@@ -137,12 +125,14 @@ export function IconButton({
   filled?: boolean;
   style?: StyleProp<ViewStyle>;
   label: string;
+  disabled?: boolean;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
       hitSlop={6}
+      disabled={disabled}
       onPress={() => {
         haptic.tap();
         onPress?.();
@@ -154,11 +144,10 @@ export function IconButton({
           borderRadius: size / 2,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: filled ? colors.lime : colors.cardStrong,
-          borderWidth: filled ? 0 : 1,
-          borderColor: colors.border,
+          backgroundColor: filled ? colors.accent : 'transparent',
         },
-        pressed && { transform: [{ scale: 0.92 }] },
+        disabled && filled && { backgroundColor: colors.bgMuted },
+        pressed && { opacity: 0.7 },
         style,
       ]}>
       {children}
@@ -172,13 +161,16 @@ export function PrimaryButton({
   icon,
   style,
   disabled,
+  variant = 'solid',
 }: {
   label: string;
   onPress?: () => void;
   icon?: ReactNode;
   style?: StyleProp<ViewStyle>;
   disabled?: boolean;
+  variant?: 'solid' | 'outline';
 }) {
+  const solid = variant === 'solid';
   return (
     <Pressable
       disabled={disabled}
@@ -188,11 +180,12 @@ export function PrimaryButton({
       }}
       style={({ pressed }) => [
         styles.primary,
+        !solid && styles.outline,
         disabled && { opacity: 0.35 },
-        pressed && { transform: [{ scale: 0.97 }] },
+        pressed && { opacity: 0.8 },
         style,
       ]}>
-      <Sans size={16} weight="semi" color={colors.onAccent}>
+      <Sans size={15} weight="medium" color={solid ? colors.onAccent : colors.ink}>
         {label}
       </Sans>
       {icon}
@@ -201,26 +194,30 @@ export function PrimaryButton({
 }
 
 const styles = StyleSheet.create({
-  sheen: { position: 'absolute', left: 0, right: 0, top: 0, height: 36 },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 14,
-    height: 38,
+    height: 36,
     borderRadius: radii.pill,
     borderWidth: 1,
-    borderColor: colors.borderStrong,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
   },
   primary: {
-    height: 56,
+    height: 52,
     borderRadius: radii.pill,
-    backgroundColor: colors.lime,
+    backgroundColor: colors.accent,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingHorizontal: 24,
+    paddingHorizontal: 22,
+  },
+  outline: {
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
   },
 });

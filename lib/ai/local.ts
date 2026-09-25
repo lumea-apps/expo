@@ -181,7 +181,7 @@ function helloTurn(ctx: BrainContext): Turn {
   const left = remaining(ctx);
   const moment = labelForTime();
   const pieces = [
-    `Ciao ${ctx.profile.name} 👋`,
+    `Ciao ${ctx.profile.name}`,
     left.today.kcal === 0
       ? `Oggi il diario è ancora vuoto. Cosa hai mangiato — o cosa ti va per ${momentWord(moment)}?`
       : `Hai ancora **${formatKcal(Math.max(0, left.kcal))} kcal** di margine oggi. Ti preparo qualche idea per ${momentWord(moment)}?`,
@@ -221,13 +221,13 @@ function logTurn(foods: FoodItem[], t: string, ctx: BrainContext, waterMl: numbe
   const afterKcal = left.kcal - tot.kcal;
 
   let comment = '';
-  if (tot.protein >= 25) comment = 'Bel colpo di proteine 💪';
+  if (tot.protein >= 25) comment = 'Bel colpo di proteine';
   else if (tot.kcal > 750)
     comment = 'Pasto importante: ci bilanciamo più tardi con qualcosa di leggero.';
   else if (tot.protein < 10 && tot.kcal > 250)
     comment = 'Poche proteine qui — le recuperiamo al prossimo pasto.';
   else if (tot.kcal <= 350) comment = 'Leggero e pulito.';
-  else comment = 'Ricevuto 👌';
+  else comment = 'Ricevuto';
 
   const widgets: Widget[] = [{ type: 'meal_log', meal: { ...meal, items: [...foods] } }];
   if (afterKcal < 0) {
@@ -459,7 +459,7 @@ function photoTurn(input: UserInput, ctx: BrainContext): Turn {
   const tot = mealTotals(guess);
   const label = momentFrom(normalize(input.text));
   return {
-    text: `Ecco cosa vedo nel piatto 👀 **${guess.title}**, circa **${formatKcal(tot.kcal)} kcal**. Le voci con fiducia bassa sono quelle che dalla foto si stimano peggio (condimenti, olio): toccale per correggerle.`,
+    text: `Ecco cosa vedo nel piatto **${guess.title}**, circa **${formatKcal(tot.kcal)} kcal**. Le voci con fiducia bassa sono quelle che dalla foto si stimano peggio (condimenti, olio): toccale per correggerle.`,
     widgets: [
       {
         type: 'meal_log',
@@ -520,7 +520,7 @@ function summaryTurn(ctx: BrainContext): Turn {
     return {
       text: pending
         ? 'Nel diario di oggi non c’è ancora niente: se la stima di prima ti torna, tocca **Registra nel diario** sulla card e la conto subito.'
-        : `Oggi la pagina è ancora bianca ✍️ Raccontami il primo pasto — anche solo *“cappuccino e cornetto”* — e inizio a tenere il conto per te.`,
+        : `Oggi la pagina è ancora bianca Raccontami il primo pasto — anche solo *“cappuccino e cornetto”* — e inizio a tenere il conto per te.`,
       widgets: [{ type: 'macros' }],
       suggestions: ['Cappuccino e cornetto', 'Idee per colazione', 'Ho mangiato uno yogurt greco'],
     };
@@ -592,7 +592,7 @@ function waterTurn(ctx: BrainContext, ml: number): Turn {
   const T = ctx.profile.targets.water;
   return {
     text: ml
-      ? `Segnato: **+${ml} ml** 💧 Sei a ${(total / 1000).toLocaleString('it-IT', { maximumFractionDigits: 2 })} L su ${(T / 1000).toLocaleString('it-IT')} L.`
+      ? `Segnato: **+${ml} ml** Sei a ${(total / 1000).toLocaleString('it-IT', { maximumFractionDigits: 2 })} L su ${(T / 1000).toLocaleString('it-IT')} L.`
       : `Sei a **${(total / 1000).toLocaleString('it-IT', { maximumFractionDigits: 2 })} L** su ${(T / 1000).toLocaleString('it-IT')} L oggi. Tocca il bicchiere ogni volta che bevi.`,
     widgets: [{ type: 'water' }],
     suggestions: ['Com’è andata oggi?', 'Idee per uno spuntino', 'Com’è andata la settimana?'],
@@ -805,7 +805,7 @@ function planTurn(patch: ProfilePatch, ctx: BrainContext): Turn {
   const { profile, changes } = applyProfilePatch(ctx.profile, patch);
   if (!changes.length) {
     return {
-      text: 'Il tuo piano è già impostato così 👌 Se vuoi cambiarlo, dimmi per esempio *“voglio mettere massa”* o *“sono diventato vegano”*.',
+      text: 'Il tuo piano è già impostato così Se vuoi cambiarlo, dimmi per esempio *“voglio mettere massa”* o *“sono diventato vegano”*.',
       widgets: [],
       suggestions: ['Com’è andata oggi?', 'Voglio più proteine', 'Idee per cena'],
     };
@@ -835,8 +835,7 @@ export function dailyBrief(ctx: BrainContext): BrainReply {
   const yt = dayTotals(ctx.meals, dayKey(y));
   const T = ctx.profile.targets;
   const moment = labelForTime();
-  const hour = new Date().getHours();
-  const hello = `${greetingFor()}, ${ctx.profile.name} ${hour < 12 ? '☀️' : hour < 18 ? '🌤️' : '🌙'}`;
+  const hello = `${greetingFor()}, ${ctx.profile.name}.`;
   const widgets: Widget[] = [];
   let text: string;
   let proteinFocus = false;

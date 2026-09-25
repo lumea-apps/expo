@@ -1,40 +1,43 @@
-import { LinearGradient } from 'expo-linear-gradient';
-import {
-  ArrowRight,
-  Check,
-  ChevronDown,
-  Clock,
-  Flame,
-  Plus,
-  ShoppingBasket,
-} from 'lucide-react-native';
+import { ArrowRight, Check, ChevronDown } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInRight } from 'react-native-reanimated';
 
 import { Card, PrimaryButton } from '@/components/ui/Surface';
-import { Mono, Sans, Serif } from '@/components/ui/Typography';
-import { colors, gradientFor, radii } from '@/constants/theme';
+import { Display, Mono, Sans } from '@/components/ui/Typography';
+import { colors, radii } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
 import { formatKcal, labelForTime } from '@/lib/nutrition';
 import { useNouri } from '@/lib/store';
 import type { Idea, Recipe, SwapFood } from '@/lib/types';
 
-function Meta({
-  icon,
-  text,
-  color = colors.dim,
+function EmojiTile({ emoji, size = 40 }: { emoji: string; size?: number }) {
+  return (
+    <View style={[styles.tile, { width: size, height: size, borderRadius: size * 0.3 }]}>
+      <Sans size={size * 0.5} style={{ lineHeight: size * 0.62 }}>
+        {emoji}
+      </Sans>
+    </View>
+  );
+}
+
+function Stat({
+  value,
+  label,
+  color = colors.ink,
 }: {
-  icon?: React.ReactNode;
-  text: string;
+  value: string;
+  label: string;
   color?: string;
 }) {
   return (
-    <View style={styles.meta}>
-      {icon}
-      <Mono size={11} color={color}>
-        {text}
+    <View style={{ gap: 2 }}>
+      <Mono size={14} weight="medium" color={color}>
+        {value}
       </Mono>
+      <Sans size={11} color={colors.faint}>
+        {label}
+      </Sans>
     </View>
   );
 }
@@ -43,91 +46,88 @@ export function RecipeCard({ recipe, widgetKey }: { recipe: Recipe; widgetKey: s
   const [open, setOpen] = useState(false);
   const logged = useNouri((s) => Boolean(s.logged[widgetKey]));
   const logMeal = useNouri((s) => s.logMeal);
-  const [g1, g2] = gradientFor(recipe.title);
   return (
-    <Card style={{ padding: 0 }}>
-      <LinearGradient
-        colors={[g2, g1, 'rgba(0,0,0,0)']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0.2, y: 1 }}
-        style={styles.recipeHero}>
-        <Sans size={54} style={{ lineHeight: 64 }}>
-          {recipe.emoji}
-        </Sans>
-        <Serif size={28} style={{ marginTop: 8 }}>
-          {recipe.title}
-        </Serif>
-        <Sans size={14} color={colors.dim} style={{ marginTop: 4 }}>
-          {recipe.tagline}
-        </Sans>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 14 }}>
-          <Meta icon={<Clock size={12} color={colors.dim} />} text={`${recipe.minutes} min`} />
-          <Meta
-            icon={<Flame size={12} color={colors.lime} />}
-            text={`${formatKcal(recipe.kcal)} kcal`}
-            color={colors.lime}
-          />
-          <Meta text={`P ${recipe.protein}g`} color={colors.protein} />
-          <Meta text={`C ${recipe.carbs}g`} color={colors.carbs} />
-          <Meta text={`G ${recipe.fat}g`} color={colors.fat} />
+    <Card>
+      <View style={{ padding: 16, gap: 14 }}>
+        <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+          <EmojiTile emoji={recipe.emoji} />
+          <View style={{ flex: 1 }}>
+            <Display size={19} style={{ lineHeight: 24 }}>
+              {recipe.title}
+            </Display>
+            <Sans size={13} color={colors.faint} style={{ marginTop: 2 }}>
+              {recipe.tagline}
+            </Sans>
+          </View>
         </View>
-      </LinearGradient>
+        <View style={styles.stats}>
+          <Stat value={`${recipe.minutes}′`} label="tempo" />
+          <Stat value={formatKcal(recipe.kcal)} label="kcal" />
+          <Stat value={`${recipe.protein}g`} label="proteine" color={colors.protein} />
+          <Stat value={`${recipe.carbs}g`} label="carbo" color={colors.carbs} />
+          <Stat value={`${recipe.fat}g`} label="grassi" color={colors.fat} />
+        </View>
+      </View>
 
-      <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
-        <Mono upper size={10} style={{ marginBottom: 8 }}>
-          Ingredienti · 1 persona
-        </Mono>
+      <View style={styles.section}>
+        <Sans size={12} weight="medium" color={colors.faint} style={{ marginBottom: 6 }}>
+          Ingredienti per una persona
+        </Sans>
         {recipe.ingredients.map((ing) => (
           <View key={ing} style={styles.ingredient}>
             <View style={styles.bullet} />
-            <Sans size={14} color={colors.ink} style={{ flex: 1 }}>
+            <Sans size={14} style={{ flex: 1 }}>
               {ing}
             </Sans>
           </View>
         ))}
+      </View>
 
-        <Pressable
-          onPress={() => {
-            haptic.select();
-            setOpen((o) => !o);
-          }}
-          style={styles.toggle}>
-          <Sans size={14} weight="medium">
-            {open ? 'Nascondi procedimento' : 'Mostra procedimento'}
-          </Sans>
-          <ChevronDown
-            size={16}
-            color={colors.ink}
-            style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }}
-          />
-        </Pressable>
-        {open && (
-          <Animated.View entering={FadeIn} style={{ gap: 12, marginBottom: 16 }}>
-            {recipe.steps.map((s, i) => (
-              <View key={i} style={{ flexDirection: 'row', gap: 12 }}>
-                <Serif size={24} italic color={colors.lime} style={{ width: 20 }}>
-                  {i + 1}
-                </Serif>
-                <Sans size={14} color={colors.dim} style={{ flex: 1, marginTop: 3 }}>
-                  {s}
-                </Sans>
-              </View>
-            ))}
-          </Animated.View>
-        )}
+      <Pressable
+        onPress={() => {
+          haptic.select();
+          setOpen((o) => !o);
+        }}
+        style={({ pressed }) => [styles.toggle, pressed && { backgroundColor: colors.bgSubtle }]}>
+        <Sans size={14} weight="medium">
+          Procedimento
+        </Sans>
+        <ChevronDown
+          size={16}
+          color={colors.dim}
+          style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }}
+        />
+      </Pressable>
+      {open && (
+        <Animated.View
+          entering={FadeIn}
+          style={{ gap: 12, paddingHorizontal: 16, paddingBottom: 16 }}>
+          {recipe.steps.map((s, i) => (
+            <View key={i} style={{ flexDirection: 'row', gap: 12 }}>
+              <Mono size={13} color={colors.faint} style={{ width: 16, marginTop: 2 }}>
+                {i + 1}
+              </Mono>
+              <Sans size={14} color={colors.dim} style={{ flex: 1, lineHeight: 21 }}>
+                {s}
+              </Sans>
+            </View>
+          ))}
+        </Animated.View>
+      )}
 
+      <View style={styles.footer}>
         {logged ? (
           <View style={styles.done}>
-            <Check size={16} color={colors.lime} />
-            <Sans size={14} weight="medium" color={colors.lime}>
+            <Check size={16} color={colors.positive} strokeWidth={2.4} />
+            <Sans size={14} weight="medium" color={colors.positive}>
               Aggiunta al diario di oggi
             </Sans>
           </View>
         ) : (
           <PrimaryButton
-            label="L’ho mangiata: registra"
-            style={{ height: 48 }}
-            icon={<Plus size={16} color={colors.onAccent} />}
+            label="L’ho mangiata"
+            variant="outline"
+            style={{ height: 44 }}
             onPress={() => {
               logMeal(
                 {
@@ -171,54 +171,36 @@ export function IdeasCarousel({
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={{ gap: 10, paddingRight: 20 }}
       style={{ marginHorizontal: -20, paddingLeft: 20 }}>
-      {ideas.map((idea, i) => {
-        const [g1, g2] = gradientFor(idea.title);
-        return (
-          <Animated.View
-            key={idea.title}
-            entering={FadeInRight.delay(i * 90)
-              .springify()
-              .damping(18)}>
-            <Pressable
-              onPress={() => onPick(`Ricetta: ${idea.title}`)}
-              style={({ pressed }) => [pressed && { transform: [{ scale: 0.97 }] }]}>
-              <Card style={{ width: 208 }} radius={radii.md}>
-                <LinearGradient
-                  colors={[g2, g1]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.ideaHero}>
-                  <Sans size={42} style={{ lineHeight: 50 }}>
-                    {idea.emoji}
-                  </Sans>
-                  <View style={styles.ideaTime}>
-                    <Clock size={11} color={colors.ink} />
-                    <Mono size={10} color={colors.ink}>
-                      {idea.minutes}′
-                    </Mono>
-                  </View>
-                </LinearGradient>
-                <View style={{ padding: 12, gap: 4 }}>
-                  <Sans size={14} weight="semi" numberOfLines={2} style={{ minHeight: 40 }}>
-                    {idea.title}
-                  </Sans>
-                  <Sans size={12} color={colors.faint} numberOfLines={2} style={{ minHeight: 34 }}>
-                    {idea.tagline}
-                  </Sans>
-                  <View style={[styles.rowBetween, { marginTop: 6 }]}>
-                    <Mono size={11} color={colors.lime}>
-                      {formatKcal(idea.kcal)} KCAL
-                    </Mono>
-                    <Mono size={11} color={colors.protein}>
-                      P {idea.protein}G
-                    </Mono>
-                  </View>
-                </View>
-              </Card>
-            </Pressable>
-          </Animated.View>
-        );
-      })}
+      {ideas.map((idea, i) => (
+        <Animated.View key={idea.title} entering={FadeInRight.delay(i * 80).duration(350)}>
+          <Pressable
+            onPress={() => onPick(`Ricetta: ${idea.title}`)}
+            style={({ pressed }) => [styles.idea, pressed && { backgroundColor: colors.bgSubtle }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <EmojiTile emoji={idea.emoji} size={36} />
+              <Mono size={11}>{idea.minutes} min</Mono>
+            </View>
+            <View style={{ gap: 4, flex: 1 }}>
+              <Sans size={14} weight="semi" numberOfLines={2}>
+                {idea.title}
+              </Sans>
+              <Sans size={12} color={colors.faint} numberOfLines={2}>
+                {idea.tagline}
+              </Sans>
+            </View>
+            <Sans size={12} color={colors.dim}>
+              <Mono size={12} color={colors.ink}>
+                {formatKcal(idea.kcal)}
+              </Mono>{' '}
+              kcal ·{' '}
+              <Mono size={12} color={colors.ink}>
+                {idea.protein}g
+              </Mono>{' '}
+              proteine
+            </Sans>
+          </Pressable>
+        </Animated.View>
+      ))}
     </ScrollView>
   );
 }
@@ -228,51 +210,44 @@ export function SwapCard({ from, to, reason }: { from: SwapFood; to: SwapFood; r
   const dp = to.protein - from.protein;
   return (
     <Card style={{ padding: 16 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <View style={[styles.swapSide, { opacity: 0.6 }]}>
-          <Sans size={30}>{from.emoji}</Sans>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <View style={styles.swapSide}>
+          <EmojiTile emoji={from.emoji} size={34} />
           <Sans
             size={13}
-            weight="medium"
-            center
+            color={colors.faint}
             numberOfLines={2}
             style={{ textDecorationLine: 'line-through' }}>
             {from.name}
           </Sans>
-          <Mono size={11}>{formatKcal(from.kcal)} kcal</Mono>
+          <Mono size={12}>{formatKcal(from.kcal)} kcal</Mono>
         </View>
-        <View style={styles.swapArrow}>
-          <ArrowRight size={16} color={colors.onAccent} />
-        </View>
-        <View
-          style={[
-            styles.swapSide,
-            { borderColor: 'rgba(212,255,58,0.4)', backgroundColor: colors.limeSoft },
-          ]}>
-          <Sans size={30}>{to.emoji}</Sans>
-          <Sans size={13} weight="semi" center numberOfLines={2}>
+        <ArrowRight size={16} color={colors.faint} />
+        <View style={styles.swapSide}>
+          <EmojiTile emoji={to.emoji} size={34} />
+          <Sans size={13} weight="semi" numberOfLines={2}>
             {to.name}
           </Sans>
-          <Mono size={11} color={colors.lime}>
+          <Mono size={12} color={colors.ink}>
             {formatKcal(to.kcal)} kcal
           </Mono>
         </View>
       </View>
-      <View style={{ flexDirection: 'row', gap: 6, marginTop: 14 }}>
+      <View style={{ flexDirection: 'row', gap: 14, marginTop: 14 }}>
         {dk !== 0 && (
-          <Meta
-            text={`${dk > 0 ? '−' : '+'}${formatKcal(Math.abs(dk))} kcal`}
-            color={dk > 0 ? colors.lime : colors.amber}
-          />
+          <Sans size={13} weight="medium" color={dk > 0 ? colors.positive : colors.amber}>
+            {dk > 0 ? '−' : '+'}
+            {formatKcal(Math.abs(dk))} kcal
+          </Sans>
         )}
         {dp !== 0 && (
-          <Meta
-            text={`${dp > 0 ? '+' : '−'}${Math.abs(dp)} g proteine`}
-            color={dp > 0 ? colors.protein : colors.faint}
-          />
+          <Sans size={13} weight="medium" color={dp > 0 ? colors.positive : colors.faint}>
+            {dp > 0 ? '+' : '−'}
+            {Math.abs(dp)} g proteine
+          </Sans>
         )}
       </View>
-      <Sans size={14} color={colors.dim} style={{ marginTop: 10 }}>
+      <Sans size={14} color={colors.dim} style={{ marginTop: 6, lineHeight: 21 }}>
         {reason}
       </Sans>
     </Card>
@@ -293,21 +268,18 @@ export function GroceryCard({
   return (
     <Card style={{ padding: 16 }}>
       <View style={styles.rowBetween}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <ShoppingBasket size={16} color={colors.lime} />
-          <Sans size={15} weight="semi">
-            Lista della spesa
-          </Sans>
-        </View>
-        <Mono size={11} color={done === all.length ? colors.lime : colors.faint}>
+        <Sans size={15} weight="semi">
+          Lista della spesa
+        </Sans>
+        <Mono size={12} color={done === all.length ? colors.positive : colors.faint}>
           {done}/{all.length}
         </Mono>
       </View>
       {sections.map((sec) => (
         <View key={sec.title} style={{ marginTop: 14 }}>
-          <Mono upper size={10} style={{ marginBottom: 4 }}>
+          <Sans size={12} weight="medium" color={colors.faint} style={{ marginBottom: 2 }}>
             {sec.title}
-          </Mono>
+          </Sans>
           {sec.items.map((it) => {
             const key = `${widgetKey}:${sec.title}:${it}`;
             const on = Boolean(checked[key]);
@@ -322,7 +294,7 @@ export function GroceryCard({
                 <View
                   style={[
                     styles.checkbox,
-                    on && { backgroundColor: colors.lime, borderColor: colors.lime },
+                    on && { backgroundColor: colors.ink, borderColor: colors.ink },
                   ]}>
                   {on && <Check size={12} color={colors.onAccent} strokeWidth={3} />}
                 </View>
@@ -343,75 +315,49 @@ export function GroceryCard({
 
 const styles = StyleSheet.create({
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  meta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radii.pill,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    borderWidth: 1,
+  tile: { backgroundColor: colors.bgSubtle, alignItems: 'center', justifyContent: 'center' },
+  stats: { flexDirection: 'row', justifyContent: 'space-between' },
+  section: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderTopWidth: 1,
     borderColor: colors.border,
   },
-  recipeHero: { padding: 16, paddingBottom: 18, marginBottom: 4 },
   ingredient: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
-  bullet: { width: 5, height: 5, borderRadius: 3, backgroundColor: colors.lime },
+  bullet: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.faint },
   toggle: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 12,
-    marginBottom: 12,
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
     borderTopWidth: 1,
-    borderBottomWidth: 1,
     borderColor: colors.border,
   },
+  footer: { padding: 16, paddingTop: 12, borderTopWidth: 1, borderColor: colors.border },
   done: {
-    height: 48,
-    borderRadius: radii.pill,
+    height: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: colors.limeSoft,
   },
-  ideaHero: { height: 96, alignItems: 'center', justifyContent: 'center' },
-  ideaTime: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: radii.pill,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-  },
-  swapSide: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 4,
-    padding: 12,
-    borderRadius: radii.md,
+  idea: {
+    width: 196,
+    minHeight: 176,
+    padding: 14,
+    gap: 12,
+    borderRadius: radii.lg,
     borderWidth: 1,
     borderColor: colors.border,
+    backgroundColor: colors.bg,
   },
-  swapArrow: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: colors.lime,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  swapSide: { flex: 1, gap: 6 },
   groceryRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7 },
   checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
+    width: 18,
+    height: 18,
+    borderRadius: 5,
     borderWidth: 1.5,
     borderColor: colors.borderStrong,
     alignItems: 'center',

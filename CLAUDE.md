@@ -30,7 +30,7 @@ The whole product is a conversation; data screens are secondary. See `README.md`
 - `app/today.tsx` - "Oggi" modal: rings, macro bars, water, meal timeline
 - `app/profile.tsx` - Profile, AI engine status, demo/reset actions
 - `app/voice.tsx` - Voice mode (Web Speech API on web, keyboard dictation on native, TTS via `expo-speech`)
-- `app/_layout.tsx` - Root layout (Google fonts, dark theme, splash, stack/modals)
+- `app/_layout.tsx` - Root layout (Geist fonts, light theme, splash, stack/modals)
 
 Key modules:
 
@@ -39,7 +39,7 @@ Key modules:
 - `lib/store.ts` - Zustand store persisted with AsyncStorage (profile, meals, water, chat).
 - `lib/foods.ts`, `lib/recipes.ts` - Food table + recipe catalogue used by the offline brain.
 - `constants/theme.ts` - Design tokens (colors per macro, fonts, radii). Use these instead of hard-coded values.
-- `components/ui/` - Orb, Aurora background, Glass/Card/Chip/buttons, rings, typography (`Serif`/`Sans`/`Mono`).
+- `components/ui/` - Orb, Glass/Card/Chip/buttons, rings, typography (`Display`/`Sans`/`Mono`, all Geist; `Mono` = tabular figures).
 
 Routes are automatically typed via `expo-router` typed routes experiment.
 
@@ -88,7 +88,7 @@ import { Home, Settings, User } from 'lucide-react-native';
   - `experiments.typedRoutes: true` - TypeScript route types
   - `experiments.tsconfigPaths: true` - Metro resolves tsconfig paths
   - `platforms: ["ios", "android", "web"]` - All platforms enabled
-  - `userInterfaceStyle: "dark"` - The app is dark-only by design
+  - `userInterfaceStyle: "light"` - The app is light-only by design (white, hairline borders, black accents)
 - **babel.config.js**: `unstable_transformImportMeta: true` is required — zustand's ESM middleware uses `import.meta`, which otherwise breaks the web bundle
 - **metro.config.js**: `maxWorkers` is set to 2 - **DO NOT MODIFY** this value, it's intentionally limited for system stability
 

@@ -32,8 +32,7 @@ function tokenize(src: string): Token[] {
 const kindStyle: Record<Kind, TextStyle> = {
   plain: {},
   bold: { fontFamily: fonts.sansSemi, color: colors.ink },
-  // Editorial flourish: emphasis switches to the serif italic, slightly larger.
-  italic: { fontFamily: fonts.serifItalic, fontSize: 19, color: colors.ink },
+  italic: { fontFamily: fonts.sansMedium, color: colors.ink },
 };
 
 /**
@@ -45,7 +44,7 @@ export function RichText({
   stream = false,
   onDone,
   size = 16,
-  color = colors.dim,
+  color = colors.ink,
 }: {
   text: string;
   stream?: boolean;
@@ -80,7 +79,8 @@ export function RichText({
       style={{
         fontFamily: fonts.sans,
         fontSize: size,
-        lineHeight: Math.round(size * 1.55),
+        lineHeight: Math.round(size * 1.6),
+        letterSpacing: -0.1,
         color,
       }}>
       {visible.map((t, i) => {

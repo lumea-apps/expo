@@ -4,15 +4,15 @@ Nouri è un'app Expo di **assistenza nutrizionale conversazionale**. Non ha dash
 
 ## Direzione visiva
 
-Riferimenti studiati: i trend 2026 per le app AI (generative UI, orb vocale che cambia con lo stato, dark mode di base, glass con parsimonia), Alma e Cal AI per il food logging (input multimodale, correzione rapida delle stime, badge di confidenza), e il linguaggio "editoriale" delle app lifestyle recenti.
+Chiara, tipografica e silenziosa, a metà tra ElevenLabs e ChatGPT: la conversazione è il prodotto e l'interfaccia si fa da parte.
 
 | Elemento | Scelta |
 | --- | --- |
-| Palette | Base "night kitchen" `#08080C`, inchiostro caldo `#F5F2EA`, un solo accento lime clorofilla `#D4FF3A`. Ogni macro ha un colore fisso: proteine `#FF8A5B`, carbo `#B8A5FF`, grassi `#5EE3C8`, acqua `#6CC6FF` |
-| Tipografia | **Instrument Serif** (titoli editoriali, corsivo per l'enfasi, anche dentro le risposte), **Inter Tight** (UI), **JetBrains Mono** (numeri, etichette, orari) |
-| Presenza AI | Un **orb vivo**: sfere di colore dei macro che orbitano in una bolla di vetro. Respira a riposo, accelera quando pensa, pulsa quando ascolta o parla |
-| Superfici | Glass sfocato solo per gli elementi flottanti (composer, header). Card traslucide leggere nel feed. Aurora animata e grana pellicola sullo sfondo |
-| Motion | Testo che arriva parola per parola con coda sfumata, widget che entrano a molla uno dopo l'altro, numeri che contano, anelli che si disegnano, feedback aptico |
+| Superfici | Fondo bianco, card bianche con bordo sottile `#EAEAEE`, grigi chiari per le bolle dell'utente e gli stati. Niente gradienti, glow o texture |
+| Colore | Inchiostro quasi nero `#0E0E10` per testo e azioni (bottoni a pillola neri). Il colore compare solo nei dati, con una tinta fissa per ogni macro (proteine `#EE8A62`, carboidrati `#8088F2`, grassi `#3FB595`, acqua `#4FA3EE`), e nell'orb |
+| Tipografia | **Geist** in tutta l'app. Titoli in due toni (nero + grigio), numeri con cifre tabulari |
+| Presenza AI | Un **orb pastello** (cielo, lilla, pesca, menta) con ombra morbida. Si muove piano a riposo e accelera quando Nouri ascolta, pensa o parla |
+| Motion | Testo che arriva parola per parola, card che entrano in dissolvenza, numeri e anelli che si animano, feedback aptico leggero |
 
 ## Cosa fa
 
@@ -90,7 +90,7 @@ In produzione aggiungi autenticazione e rate limiting al proxy, e gestisci la ri
 
 ```
 app/                 schermate (chat, onboarding, oggi, profilo, voce)
-components/ui/       Orb, Aurora, Glass/Card/Chip, anelli, tipografia
+components/ui/       Orb, Glass/Card/Chip/bottoni, anelli, tipografia
 components/chat/     header, composer, messaggi, testo in streaming, stato "sto pensando"
 components/widgets/  le card generative
 lib/ai/              askNouri() → Claude o motore offline

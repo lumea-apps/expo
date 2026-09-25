@@ -1,5 +1,5 @@
 import { claudeConfigured, claudeRespond, CLAUDE_MODEL } from './claude';
-import { localRespond } from './local';
+import { localRespond, quickRespond } from './local';
 import type { BrainContext, BrainReply, UserInput } from './types';
 
 export type { BrainContext, BrainReply, UserInput } from './types';
@@ -15,6 +15,12 @@ const MIN_THINK_MS = 900;
  * if the request fails, so the conversation never dead-ends.
  */
 export async function askNouri(input: UserInput, ctx: BrainContext): Promise<BrainReply> {
+  // Shortcuts ("la solita colazione") answer instantly, with or without Claude.
+  const quick = quickRespond(input, ctx);
+  if (quick) {
+    await new Promise((r) => setTimeout(r, 350));
+    return quick;
+  }
   const started = Date.now();
   let reply: BrainReply;
   if (claudeConfigured) {

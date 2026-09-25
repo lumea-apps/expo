@@ -43,7 +43,7 @@ export interface MealDraft {
 export interface Meal extends MealDraft {
   id: string;
   at: string; // ISO timestamp
-  source: 'chat' | 'photo' | 'recipe';
+  source: 'chat' | 'photo' | 'recipe' | 'search' | 'plan' | 'shortcut';
 }
 
 export interface Recipe {
@@ -75,6 +75,81 @@ export interface SwapFood {
   protein: number;
 }
 
+// ——— memory ———
+
+/** like / dislike = foods; note = a habit or preference ("a pranzo mangio in mensa"). */
+export type MemoryKind = 'like' | 'dislike' | 'note';
+
+export interface MemoryNote {
+  id: string;
+  kind: MemoryKind;
+  text: string;
+  at: string;
+}
+
+/** A remembered meal the user can log in one tap or by name ("la solita colazione"). */
+export interface Shortcut {
+  id: string;
+  name: string;
+  meal: MealDraft;
+  at: string;
+  uses: number;
+}
+
+/** What the memory card in chat confirms: new notes, forgotten ones, a saved shortcut. */
+export interface MemoryChange {
+  kind: MemoryKind | 'shortcut' | 'forget';
+  text: string;
+}
+
+// ——— food facts (quick search, barcode) ———
+
+export interface Nutrients extends Macros {
+  fiber?: number;
+  sugars?: number;
+  satFat?: number;
+  salt?: number;
+}
+
+export interface FoodFacts {
+  /** Stable id: `nouri:<key>` for the built-in table, `off:<barcode>` for products. */
+  id: string;
+  name: string;
+  brand?: string;
+  emoji: string;
+  image?: string;
+  source: 'nouri' | 'off' | 'claude';
+  per100: Nutrients;
+  /** A typical portion ("1 vasetto", 170 g). */
+  portion: { label: string; grams: number };
+}
+
+// ——— meal plan ———
+
+export type PlanFocus = 'balanced' | 'protein' | 'quick' | 'light';
+
+export interface PlannedMeal extends Macros {
+  label: MealLabel;
+  title: string;
+  emoji: string;
+  minutes: number;
+  /** Servings of the recipe (1 = the recipe as written). */
+  servings: number;
+}
+
+export interface PlanDay {
+  date: string; // day key
+  meals: PlannedMeal[];
+}
+
+export interface MealPlan {
+  id: string;
+  kind: 'day' | 'week';
+  focus: PlanFocus;
+  createdAt: string;
+  days: PlanDay[];
+}
+
 /**
  * Generative UI blocks the assistant can place in the conversation.
  * Both the local demo brain and Claude produce exactly these shapes.
@@ -89,7 +164,10 @@ export type Widget =
   | { type: 'grocery'; sections: { title: string; items: string[] }[] }
   | { type: 'week' }
   | { type: 'swap'; from: SwapFood; to: SwapFood; reason: string }
-  | { type: 'targets'; before: Targets; after: Targets; changes: string[] };
+  | { type: 'targets'; before: Targets; after: Targets; changes: string[] }
+  | { type: 'meal_plan'; plan: MealPlan }
+  | { type: 'food_facts'; food: FoodFacts }
+  | { type: 'memory'; changes: MemoryChange[]; recall?: boolean };
 
 /** A change to the user's plan requested in conversation ("voglio mettere massa"). */
 export interface ProfilePatch {
@@ -108,6 +186,13 @@ export interface AssistantTurn {
   text: string;
   widgets: Widget[];
   suggestions: string[];
+}
+
+/** Memory updates requested in a message, applied by the client (like plan changes). */
+export interface MemoryOps {
+  add?: { kind: MemoryKind; text: string }[];
+  forget?: string[];
+  shortcut?: { name: string; meal: MealDraft };
 }
 
 export interface ChatMessage {

@@ -2,8 +2,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
+import { forgets, sameMemory } from './memory';
 import { dayKey, uid } from './nutrition';
-import type { ChatMessage, Meal, MealDraft, Profile } from './types';
+import type {
+  ChatMessage,
+  FoodFacts,
+  Meal,
+  MealDraft,
+  MealPlan,
+  MemoryChange,
+  MemoryKind,
+  MemoryNote,
+  Profile,
+  Shortcut,
+} from './types';
 
 interface NouriState {
   profile: Profile | null;
@@ -16,6 +28,16 @@ interface NouriState {
   speakReplies: boolean;
   /** Day key of the last proactive morning brief, so it is posted once per day. */
   lastBrief: string | null;
+  /** When off, Nouri neither saves nor uses memories (shortcuts keep working). */
+  memoryOn: boolean;
+  memories: MemoryNote[];
+  shortcuts: Shortcut[];
+  /** The active meal plan (the latest one generated). */
+  plan: MealPlan | null;
+  /** planMealKey → logged meal id, so a planned meal shows as eaten. */
+  planLog: Record<string, string>;
+  /** Last foods picked in quick search, newest first. */
+  recentFoods: FoodFacts[];
 
   // ephemeral (not persisted)
   hydrated: boolean;
@@ -32,6 +54,16 @@ interface NouriState {
   toggleChecked: (key: string) => void;
   setSpeakReplies: (v: boolean) => void;
   markBrief: (day: string) => void;
+  setMemoryOn: (v: boolean) => void;
+  remember: (notes: { kind: MemoryKind; text: string }[]) => MemoryChange[];
+  forget: (terms: string[]) => MemoryChange[];
+  removeMemory: (id: string) => void;
+  saveShortcut: (name: string, meal: MealDraft) => Shortcut;
+  removeShortcut: (id: string) => void;
+  countShortcutUse: (id: string) => void;
+  setPlan: (plan: MealPlan | null) => void;
+  markPlanMeal: (key: string, mealId: string) => void;
+  pushRecentFood: (f: FoodFacts) => void;
   clearChat: () => void;
   seedDemoWeek: () => void;
   resetAll: () => void;
@@ -48,6 +80,12 @@ export const useNouri = create<NouriState>()(
       checked: {},
       speakReplies: false,
       lastBrief: null,
+      memoryOn: true,
+      memories: [],
+      shortcuts: [],
+      plan: null,
+      planLog: {},
+      recentFoods: [],
       hydrated: false,
       thinking: false,
       fresh: {},
@@ -67,6 +105,7 @@ export const useNouri = create<NouriState>()(
         set((s) => ({
           meals: s.meals.filter((m) => m.id !== id),
           logged: Object.fromEntries(Object.entries(s.logged).filter(([, v]) => v !== id)),
+          planLog: Object.fromEntries(Object.entries(s.planLog).filter(([, v]) => v !== id)),
         })),
 
       addWater: (ml) =>
@@ -98,6 +137,76 @@ export const useNouri = create<NouriState>()(
       setSpeakReplies: (speakReplies) => set({ speakReplies }),
 
       markBrief: (lastBrief) => set({ lastBrief }),
+
+      setMemoryOn: (memoryOn) => set({ memoryOn }),
+
+      remember: (notes) => {
+        const changes: MemoryChange[] = [];
+        set((s) => {
+          let memories = [...s.memories];
+          for (const n of notes) {
+            const text = n.text.trim();
+            if (!text || memories.some((m) => m.kind === n.kind && sameMemory(m.text, text)))
+              continue;
+            // loving something you said you disliked (or vice versa) replaces the old note
+            if (n.kind !== 'note') {
+              const opposite = n.kind === 'like' ? 'dislike' : 'like';
+              memories = memories.filter((m) => !(m.kind === opposite && sameMemory(m.text, text)));
+            }
+            memories.push({ id: uid(), kind: n.kind, text, at: new Date().toISOString() });
+            changes.push({ kind: n.kind, text });
+          }
+          return { memories };
+        });
+        return changes;
+      },
+
+      forget: (terms) => {
+        const changes: MemoryChange[] = [];
+        set((s) => ({
+          memories: s.memories.filter((m) => {
+            const hit = terms.some((t) => forgets(m, t));
+            if (hit) changes.push({ kind: 'forget', text: m.text });
+            return !hit;
+          }),
+        }));
+        return changes;
+      },
+
+      removeMemory: (id) => set((s) => ({ memories: s.memories.filter((m) => m.id !== id) })),
+
+      saveShortcut: (name, meal) => {
+        const shortcut: Shortcut = {
+          id: uid(),
+          name: name.trim(),
+          meal: { ...meal, items: meal.items.map(({ confidence: _, ...it }) => it) },
+          at: new Date().toISOString(),
+          uses: 0,
+        };
+        set((s) => ({
+          shortcuts: [
+            ...s.shortcuts.filter((x) => x.name.toLowerCase() !== shortcut.name.toLowerCase()),
+            shortcut,
+          ],
+        }));
+        return shortcut;
+      },
+
+      removeShortcut: (id) => set((s) => ({ shortcuts: s.shortcuts.filter((x) => x.id !== id) })),
+
+      countShortcutUse: (id) =>
+        set((s) => ({
+          shortcuts: s.shortcuts.map((x) => (x.id === id ? { ...x, uses: x.uses + 1 } : x)),
+        })),
+
+      setPlan: (plan) => set({ plan }),
+
+      markPlanMeal: (key, mealId) => set((s) => ({ planLog: { ...s.planLog, [key]: mealId } })),
+
+      pushRecentFood: (f) =>
+        set((s) => ({
+          recentFoods: [f, ...s.recentFoods.filter((x) => x.id !== f.id)].slice(0, 8),
+        })),
 
       clearChat: () => set({ messages: [], logged: {}, checked: {}, fresh: {} }),
 
@@ -150,6 +259,12 @@ export const useNouri = create<NouriState>()(
 
       resetAll: () =>
         set({
+          memoryOn: true,
+          memories: [],
+          shortcuts: [],
+          plan: null,
+          planLog: {},
+          recentFoods: [],
           lastBrief: null,
           profile: null,
           meals: [],
@@ -171,6 +286,12 @@ export const useNouri = create<NouriState>()(
         checked: s.checked,
         speakReplies: s.speakReplies,
         lastBrief: s.lastBrief,
+        memoryOn: s.memoryOn,
+        memories: s.memories,
+        shortcuts: s.shortcuts,
+        plan: s.plan,
+        planLog: s.planLog,
+        recentFoods: s.recentFoods,
         // keep the chat light: large inline data-URIs (web photos) are dropped
         messages: s.messages
           .slice(-80)

@@ -19,12 +19,13 @@ import { Orb } from '@/components/ui/Orb';
 import { Mono, Sans } from '@/components/ui/Typography';
 import { colors, radii } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
-import { dayKey, dayTotals, formatKcal, goalLabels } from '@/lib/nutrition';
+import { dayKey, dayTotals, formatKcal, goalLabels, mealTotals } from '@/lib/nutrition';
+import { logShortcut } from '@/lib/shortcuts';
 import { useNouri } from '@/lib/store';
 
 const WIDTH = 312;
 
-/** Left drawer, ChatGPT-style: new conversation, today at a glance, shortcuts, profile. */
+/** Left drawer, ChatGPT-style: new conversation, today at a glance, tools, shortcuts, profile. */
 export function SideMenu({
   visible,
   onClose,
@@ -41,6 +42,9 @@ export function SideMenu({
   const profile = useNouri((s) => s.profile);
   const meals = useNouri((s) => s.meals);
   const water = useNouri((s) => s.water[dayKey()] ?? 0);
+  const plan = useNouri((s) => s.plan);
+  const memoryOn = useNouri((s) => s.memoryOn);
+  const shortcuts = useNouri((s) => s.shortcuts);
   const [mounted, setMounted] = useState(visible);
   const progress = useSharedValue(0);
   const drag = useSharedValue(0);
@@ -166,14 +170,58 @@ export function SideMenu({
 
             <View>
               <Sans size={13} weight="medium" color={colors.faint} style={styles.section}>
-                Scorciatoie
+                Strumenti
               </Sans>
               <MenuRow
-                icon="notebook-bold-duotone"
+                icon="magnifer-bold-duotone"
                 tint="blue"
+                label="Cerca valori nutrizionali"
+                onPress={() => go(() => router.push('/search'))}
+              />
+              <MenuRow
+                icon="calendar-bold-duotone"
+                tint="violet"
+                label="Piano pasti"
+                value={plan ? (plan.kind === 'week' ? 'Settimana' : 'Giorno') : undefined}
+                onPress={() => go(() => router.push('/meal-plan'))}
+              />
+              <MenuRow
+                icon="brain-bold-duotone"
+                tint="violet"
+                label="Memoria"
+                value={memoryOn ? undefined : 'Spenta'}
+                onPress={() => go(() => router.push('/memory'))}
+              />
+              <MenuRow
+                icon="notebook-bold-duotone"
+                tint="gray"
                 label="Diario di oggi"
                 onPress={() => go(() => router.push('/today'))}
               />
+            </View>
+
+            {shortcuts.length > 0 && (
+              <View>
+                <Sans size={13} weight="medium" color={colors.faint} style={styles.section}>
+                  Le tue scorciatoie
+                </Sans>
+                {shortcuts.slice(0, 4).map((sc) => (
+                  <MenuRow
+                    key={sc.id}
+                    icon="bolt-circle-bold-duotone"
+                    tint="amber"
+                    label={sc.name}
+                    value={`${formatKcal(mealTotals(sc.meal).kcal)} kcal`}
+                    onPress={() => go(() => logShortcut(sc))}
+                  />
+                ))}
+              </View>
+            )}
+
+            <View>
+              <Sans size={13} weight="medium" color={colors.faint} style={styles.section}>
+                Chiedi a Nouri
+              </Sans>
               <MenuRow
                 icon="chef-hat-heart-bold-duotone"
                 tint="peach"

@@ -12,13 +12,27 @@ import './polyfill';
 
 import Anthropic from '@anthropic-ai/sdk';
 
-import { AVOID_OPTIONS, dayTotals, formatTime, mealsOn, mealTotals } from '../nutrition';
+import { memoryContext } from '../memory';
+import {
+  AVOID_OPTIONS,
+  dayKey,
+  dayTotals,
+  formatTime,
+  mealsOn,
+  mealTotals,
+  uid,
+} from '../nutrition';
 import type {
   Activity,
   AssistantTurn,
   ChatMessage,
   Diet,
   Goal,
+  MealLabel,
+  MealPlan,
+  MemoryKind,
+  MemoryOps,
+  PlanFocus,
   ProfilePatch,
   Widget,
 } from '../types';
@@ -62,6 +76,8 @@ Ogni risposta è un oggetto JSON con:
   • grocery — lista della spesa raggruppata per reparto.
   • week — grafico delle calorie degli ultimi 7 giorni.
   • swap — uno scambio furbo: alimento di partenza → alternativa, con motivo.
+  • meal_plan — un piano pasti quando l'utente lo chiede: 1 giorno ("start" today o tomorrow) oppure 7 giorni se chiede la settimana. Ogni giorno ha 4 pasti in quest'ordine: Colazione, Pranzo, Spuntino, Cena, con kcal e macro della porzione e minuti di preparazione. Ogni giorno entro ±8% del target calorico e vicino al target di proteine; piatti italiani realistici e vari (nessun piatto più di 2 volte a settimana, mai due giorni di fila). "focus": balanced | protein | quick | light. Nel testo 1–2 frasi (media di kcal e proteine, cosa hai escluso): non elencare i piatti. L'app salva il piano come piano attivo.
+  • food_facts — valori nutrizionali di un alimento o prodotto ("quante calorie ha…", "valori del parmigiano"): valori per 100 g (fibre, zuccheri e sale compresi, 0 se trascurabili) e una porzione tipica in grammi. "brand" vuoto se non è un prodotto di marca.
 - "suggestions": 2–3 risposte rapide che l'utente potrebbe toccare, scritte in prima persona dal punto di vista dell'utente (max ~32 caratteri).
 - "water_ml": millilitri d'acqua che l'utente dice di aver appena bevuto in questo messaggio, altrimenti 0.
 - "profile_changes": solo se l'utente chiede di cambiare il suo piano, altrimenti []. Campi e valori ammessi:
@@ -69,6 +85,13 @@ Ogni risposta è un oggetto JSON con:
   activity = low | medium | high · avoid_add / avoid_remove = Lattosio | Glutine | Frutta a guscio | Crostacei | Uova | Pesce | Carne ·
   protein_factor / kcal_factor = moltiplicatore tra 0.7 e 1.4 (es. "più proteine" → protein_factor "1.15").
   L'app ricalcola i target e mostra da sola una card con il prima e il dopo: nel testo conferma la modifica in una frase, senza ripetere i numeri.
+- "memory_add": preferenze stabili che l'utente esprime in questo messaggio e che vale la pena ricordare, altrimenti []. kind = like (cibi che ama) | dislike (cibi che non gli piacciono o non digerisce) | note (abitudini e contesto utili: "pranzo in mensa nei feriali", "si allena la sera"). Testo breve (1–6 parole). Solo ciò che l'utente dice di sé, mai dedotto da un singolo pasto. L'app mostra la conferma: nel testo basta una frase.
+- "memory_forget": ciò che l'utente ti chiede di dimenticare ("dimentica il salmone" → "Salmone"), altrimenti [].
+
+MEMORIA
+- Il blocco <memoria> è ciò che sai dell'utente: rispettalo sempre. Mai proporre cibi che non gli piacciono, proponi più spesso quelli che ama, tieni conto delle abitudini. Non ripeterlo nel testo se non serve.
+- Le scorciatoie sono pasti salvati con un nome: l'app le registra da sola quando l'utente le nomina.
+- Se c'è <piano_oggi>, è il piano pasti attivo: usalo quando l'utente chiede cosa mangiare oggi.
 
 PRINCIPI
 - Usa il contesto <oggi> per personalizzare: macro rimanenti, pasti già registrati, obiettivo, dieta, alimenti da evitare. Non proporre mai cibi che l'utente evita o incompatibili con la sua dieta.
@@ -157,6 +180,42 @@ const TURN_SCHEMA = obj({
         }),
         widgetOf('week'),
         widgetOf('swap', { from: swapFood, to: swapFood, reason: STR }),
+        widgetOf('meal_plan', {
+          start: { type: 'string', enum: ['today', 'tomorrow'] },
+          focus: { type: 'string', enum: ['balanced', 'protein', 'quick', 'light'] },
+          days: {
+            type: 'array',
+            items: obj({
+              meals: {
+                type: 'array',
+                items: obj({
+                  label: { type: 'string', enum: ['Colazione', 'Pranzo', 'Spuntino', 'Cena'] },
+                  title: STR,
+                  emoji: STR,
+                  kcal: NUM,
+                  protein: NUM,
+                  carbs: NUM,
+                  fat: NUM,
+                  minutes: NUM,
+                }),
+              },
+            }),
+          },
+        }),
+        widgetOf('food_facts', {
+          name: STR,
+          brand: STR,
+          emoji: STR,
+          portion_label: STR,
+          portion_g: NUM,
+          kcal_100g: NUM,
+          protein_100g: NUM,
+          carbs_100g: NUM,
+          fat_100g: NUM,
+          fiber_100g: NUM,
+          sugars_100g: NUM,
+          salt_100g: NUM,
+        }),
       ],
     },
   },
@@ -181,6 +240,11 @@ const TURN_SCHEMA = obj({
       value: STR,
     }),
   },
+  memory_add: {
+    type: 'array',
+    items: obj({ kind: { type: 'string', enum: ['like', 'dislike', 'note'] }, text: STR }),
+  },
+  memory_forget: { type: 'array', items: STR },
 });
 
 function contextBlock(ctx: BrainContext): string {
@@ -193,7 +257,15 @@ function contextBlock(ctx: BrainContext): string {
     return `- ${formatTime(m.at)} ${m.label}: ${m.title} (${t.kcal} kcal, P${t.protein} C${t.carbs} G${t.fat})`;
   });
   const avoid = profile.avoid.length ? profile.avoid.join(', ') : 'nulla';
-  return `<oggi>
+  const memory = ctx.memoryOn
+    ? memoryContext(ctx.memories, ctx.shortcuts)
+    : '<memoria>spenta: non salvare nulla, memory_add sempre []</memoria>';
+  const planned = ctx.plan?.days.find((d) => d.date === dayKey());
+  const plan = planned
+    ? `\n<piano_oggi>\n${planned.meals.map((m) => `- ${m.label}: ${m.title} (${m.kcal} kcal, P${m.protein})`).join('\n')}\n</piano_oggi>`
+    : '';
+  return `${memory}${plan}
+<oggi>
 Ora locale: ${new Date().toLocaleString('it-IT', { weekday: 'long', hour: '2-digit', minute: '2-digit' })}
 Utente: ${profile.name} · obiettivo ${profile.goal} · dieta ${profile.diet} · evita: ${avoid}${profile.weight ? ` · ${profile.weight} kg` : ''}
 Target giornaliero: ${T.kcal} kcal, P${T.protein} g, C${T.carbs} g, G${T.fat} g, acqua ${T.water} ml
@@ -214,11 +286,20 @@ function historyToMessages(history: ChatMessage[]): Anthropic.Beta.BetaMessagePa
           role: 'assistant',
           content: JSON.stringify({
             text: m.text,
-            widgets: m.widgets ?? [],
+            widgets: (m.widgets ?? []).filter((w) => w.type !== 'memory').map(compact),
             suggestions: m.suggestions ?? [],
           }),
         }
   );
+}
+
+/** Meal plans are large: past ones are summarised so the history stays light. */
+function compact(w: Widget): unknown {
+  if (w.type !== 'meal_plan') return w;
+  return {
+    type: 'meal_plan',
+    days: w.plan.days.map((d) => ({ meals: d.meals.map((m) => `${m.label}: ${m.title}`) })),
+  };
 }
 
 type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
@@ -280,11 +361,14 @@ export async function claudeRespond(input: UserInput, ctx: BrainContext): Promis
   const parsed = JSON.parse(textBlock.text) as Partial<AssistantTurn> & {
     water_ml?: number;
     profile_changes?: { field: string; value: string }[];
+    memory_add?: { kind: string; text: string }[];
+    memory_forget?: string[];
   };
   return {
     ...sanitize(parsed),
     waterMl: Math.max(0, Math.round(parsed.water_ml ?? 0)),
     profilePatch: toPatch(parsed.profile_changes ?? []),
+    memory: ctx.memoryOn ? toMemory(parsed.memory_add, parsed.memory_forget) : undefined,
     engine: 'claude',
   };
 }
@@ -312,6 +396,92 @@ function toPatch(changes: { field: string; value: string }[]): ProfilePatch | un
       p.avoidRemove = [...(p.avoidRemove ?? []), avoid(value)!];
   }
   return Object.keys(p).length ? p : undefined;
+}
+
+const KINDS: MemoryKind[] = ['like', 'dislike', 'note'];
+
+function toMemory(
+  add: { kind: string; text: string }[] = [],
+  forget: string[] = []
+): MemoryOps | undefined {
+  const ops: MemoryOps = {
+    add: add
+      .filter((a) => KINDS.includes(a.kind as MemoryKind) && typeof a.text === 'string')
+      .map((a) => ({ kind: a.kind as MemoryKind, text: a.text.trim().slice(0, 60) }))
+      .filter((a) => a.text.length > 1)
+      .slice(0, 5),
+    forget: forget.filter((f) => typeof f === 'string' && f.trim()).slice(0, 5),
+  };
+  return ops.add?.length || ops.forget?.length ? ops : undefined;
+}
+
+interface RawPlan {
+  start?: string;
+  focus?: string;
+  days?: {
+    meals?: {
+      label: string;
+      title: string;
+      emoji: string;
+      minutes: number;
+      kcal: number;
+      protein: number;
+      carbs: number;
+      fat: number;
+    }[];
+  }[];
+}
+
+interface RawFacts {
+  name?: string;
+  brand?: string;
+  emoji?: string;
+  portion_label?: string;
+  portion_g?: number;
+  kcal_100g?: number;
+  protein_100g?: number;
+  carbs_100g?: number;
+  fat_100g?: number;
+  fiber_100g?: number;
+  sugars_100g?: number;
+  salt_100g?: number;
+}
+
+const LABELS: MealLabel[] = ['Colazione', 'Pranzo', 'Spuntino', 'Cena'];
+const FOCUS: PlanFocus[] = ['balanced', 'protein', 'quick', 'light'];
+
+function toPlan(raw: RawPlan, n: (v: unknown) => number): MealPlan | null {
+  const start = new Date();
+  if (raw.start === 'tomorrow') start.setDate(start.getDate() + 1);
+  const days = (raw.days ?? []).slice(0, 7).map((d, i) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + i);
+    return {
+      date: dayKey(date),
+      meals: (d.meals ?? [])
+        .filter((m) => m?.title && LABELS.includes(m.label as MealLabel))
+        .slice(0, 5)
+        .map((m) => ({
+          label: m.label as MealLabel,
+          title: m.title,
+          emoji: m.emoji || '🍽️',
+          minutes: Math.round(n(m.minutes)),
+          servings: 1,
+          kcal: Math.round(n(m.kcal)),
+          protein: Math.round(n(m.protein) * 10) / 10,
+          carbs: Math.round(n(m.carbs) * 10) / 10,
+          fat: Math.round(n(m.fat) * 10) / 10,
+        })),
+    };
+  });
+  if (!days.some((d) => d.meals.length)) return null;
+  return {
+    id: uid(),
+    kind: days.length > 1 ? 'week' : 'day',
+    focus: FOCUS.includes(raw.focus as PlanFocus) ? (raw.focus as PlanFocus) : 'balanced',
+    createdAt: new Date().toISOString(),
+    days,
+  };
 }
 
 /** Defensive pass: keep only widgets the UI knows how to draw, with sane numbers. */
@@ -354,6 +524,39 @@ function sanitize(raw: Partial<AssistantTurn>): AssistantTurn {
       case 'week':
         widgets.push(w);
         break;
+      case 'meal_plan': {
+        const plan = toPlan(w as unknown as RawPlan, n);
+        if (plan) widgets.push({ type: 'meal_plan', plan });
+        break;
+      }
+      case 'food_facts': {
+        const f = w as unknown as RawFacts;
+        if (!f.name) break;
+        widgets.push({
+          type: 'food_facts',
+          food: {
+            id: `claude:${f.name}`,
+            name: f.name,
+            brand: f.brand?.trim() || undefined,
+            emoji: f.emoji || '🍽️',
+            source: 'claude',
+            per100: {
+              kcal: Math.round(n(f.kcal_100g)),
+              protein: n(f.protein_100g),
+              carbs: n(f.carbs_100g),
+              fat: n(f.fat_100g),
+              fiber: n(f.fiber_100g),
+              sugars: n(f.sugars_100g),
+              salt: n(f.salt_100g),
+            },
+            portion: {
+              label: f.portion_label || `${Math.round(n(f.portion_g)) || 100} g`,
+              grams: Math.round(n(f.portion_g)) || 100,
+            },
+          },
+        });
+        break;
+      }
     }
   }
   return {

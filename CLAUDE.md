@@ -30,14 +30,20 @@ The whole product is a conversation; data screens are secondary. See `README.md`
 - `app/today.tsx` - "Oggi" modal: rings, macro bars, water, meal timeline
 - `app/profile.tsx` - Profile, AI engine status, demo/reset actions
 - `app/voice.tsx` - Voice mode (Web Speech API on web, keyboard dictation on native, TTS via `expo-speech`)
+- `app/search.tsx` - Quick nutrition search: built-in foods instantly, Open Food Facts products by name or barcode (`components/food/BarcodeScanner.tsx`, stubbed on web)
+- `app/memory.tsx` - Memory: on/off switch, shortcuts, liked/disliked foods, habits
+- `app/meal-plan.tsx` - Daily or weekly meal plan: create (day/tomorrow/week × focus), mark eaten, swap a dish, grocery list
 - `app/_layout.tsx` - Root layout (Geist fonts, light theme, splash, stack/modals)
 
 Key modules:
 
-- `lib/ai/` - The "brain". `askNouri()` uses Claude (`claude.ts`, structured outputs → widgets) when `EXPO_PUBLIC_NOURI_API_URL` or `EXPO_PUBLIC_ANTHROPIC_API_KEY` is set, otherwise the offline Italian intent engine (`local.ts`). Both return `{ text, widgets, suggestions, waterMl, profilePatch }`; `lib/useSend.ts` applies water and plan changes (`applyProfilePatch` in `lib/nutrition.ts`) and adds the `targets` card. `dailyBrief()` in `local.ts` posts the first message of each new day.
+- `lib/ai/` - The "brain". `askNouri()` first tries `quickRespond()` (shortcuts, always local and instant), then uses Claude (`claude.ts`, structured outputs → widgets) when `EXPO_PUBLIC_NOURI_API_URL` or `EXPO_PUBLIC_ANTHROPIC_API_KEY` is set, otherwise the offline Italian intent engine (`local.ts`). Both return `{ text, widgets, suggestions, waterMl, profilePatch, memory, autoLog }`; `lib/useSend.ts` builds the context (`brainContext()`), applies water, plan changes (`applyProfilePatch` in `lib/nutrition.ts`) and memory changes (`applyMemory`), adds the `targets`/`memory` cards, makes a new `meal_plan` the active plan and auto-logs shortcuts. `dailyBrief()` in `local.ts` posts the first message of each new day.
 - `lib/types.ts` - `Widget` union = the generative-UI contract. Adding a widget means: type here → schema in `lib/ai/claude.ts` → card in `components/widgets/` → case in `components/widgets/index.tsx`.
 - `lib/store.ts` - Zustand store persisted with AsyncStorage (profile, meals, water, chat).
-- `lib/foods.ts`, `lib/recipes.ts` - Food table + recipe catalogue used by the offline brain.
+- `lib/foods.ts`, `lib/recipes.ts` - Food table + recipe catalogue used by the offline brain and the meal planner.
+- `lib/memory.ts` - Parses memory requests ("odio i funghi", "salvalo come colazione solita"), matches shortcuts, and checks dishes against likes/dislikes. Memory is only passed to the brains when `memoryOn` is true; shortcuts always work.
+- `lib/mealplan.ts` - `generatePlan()` (4 slots/day sized to targets, diet/avoid/dislikes respected, variety across the week), `swapPlannedMeal()`, `planGrocery()`.
+- `lib/foodfacts.ts` (pure) and `lib/foodsearch.ts` (Open Food Facts; native uses search.openfoodfacts.org, web uses the CORS-enabled `cgi/search.pl`).
 - `constants/theme.ts` - Design tokens (colors per macro, fonts, radii). Use these instead of hard-coded values.
 - `components/ui/` - Orb, Glass/Card/Chip/buttons, rings, typography (`Display`/`Sans`/`Mono`, all Geist; `Mono` = tabular figures).
 

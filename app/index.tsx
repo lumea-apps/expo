@@ -18,7 +18,7 @@ import { dailyBrief } from '@/lib/ai/local';
 import { dayKey } from '@/lib/nutrition';
 import { pickMealPhoto } from '@/lib/pickImage';
 import { useNouri } from '@/lib/store';
-import { useSend } from '@/lib/useSend';
+import { brainContext, useSend } from '@/lib/useSend';
 
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
@@ -64,12 +64,9 @@ export default function ChatScreen() {
     s.markBrief(today);
     const last = s.messages[s.messages.length - 1];
     if (!last || dayKey(last.at) === today || !s.profile) return;
-    const brief = dailyBrief({
-      profile: s.profile,
-      meals: s.meals,
-      waterToday: s.water[today] ?? 0,
-      history: s.messages,
-    });
+    const ctx = brainContext();
+    if (!ctx) return;
+    const brief = dailyBrief(ctx);
     s.pushMessage(
       {
         role: 'assistant',

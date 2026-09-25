@@ -9,7 +9,10 @@ import { useSheet } from '@/components/ui/Sheet';
 import { Chip, Glass, IconButton } from '@/components/ui/Surface';
 import { colors, fonts } from '@/constants/theme';
 import type { UserInput } from '@/lib/ai';
+import { formatKcal, mealTotals } from '@/lib/nutrition';
 import { pickMealPhoto } from '@/lib/pickImage';
+import { logShortcut } from '@/lib/shortcuts';
+import { useNouri } from '@/lib/store';
 
 export function Composer({
   suggestions,
@@ -40,7 +43,9 @@ export function Composer({
     onSend({ text: caption, image: img });
   };
 
-  const openAttach = () =>
+  const openAttach = () => {
+    const { shortcuts, plan } = useNouri.getState();
+    const favourite = [...shortcuts].sort((a, b) => b.uses - a.uses).slice(0, 2);
     sheet.open({
       render: (close) => (
         <View>
@@ -62,15 +67,42 @@ export function Composer({
                 label: Platform.OS === 'web' ? 'Foto del piatto' : 'Galleria',
                 onPress: () => close(() => photo('library')),
               },
-              {
-                icon: 'waterdrop-bold-duotone',
-                tint: 'sky',
-                label: 'Un bicchiere',
-                onPress: () => close(() => onSend({ text: 'Ho bevuto un bicchiere d’acqua' })),
-              },
+              Platform.OS !== 'web'
+                ? {
+                    icon: 'barcode-scan-bold-duotone',
+                    tint: 'gray',
+                    label: 'Codice a barre',
+                    onPress: () =>
+                      close(() => router.push({ pathname: '/search', params: { scan: '1' } })),
+                  }
+                : {
+                    icon: 'magnifer-bold-duotone',
+                    tint: 'blue',
+                    label: 'Cerca alimento',
+                    onPress: () => close(() => router.push('/search')),
+                  },
             ]}
           />
           <MenuGroup>
+            {favourite.map((sc) => (
+              <MenuRow
+                key={sc.id}
+                icon="bolt-circle-bold-duotone"
+                tint="amber"
+                label={sc.name}
+                hint={`Registra subito · ${formatKcal(mealTotals(sc.meal).kcal)} kcal`}
+                onPress={() => close(() => logShortcut(sc))}
+              />
+            ))}
+            {Platform.OS !== 'web' ? (
+              <MenuRow
+                icon="magnifer-bold-duotone"
+                tint="blue"
+                label="Cerca valori nutrizionali"
+                hint="Alimenti e prodotti, anche offline"
+                onPress={() => close(() => router.push('/search'))}
+              />
+            ) : null}
             <MenuRow
               icon="plate-bold-duotone"
               tint="peach"
@@ -84,33 +116,29 @@ export function Composer({
               }
             />
             <MenuRow
+              icon="calendar-bold-duotone"
+              tint="violet"
+              label={plan ? 'Il tuo piano pasti' : 'Crea un piano pasti'}
+              hint={plan ? 'Oggi e il resto della settimana' : 'Per oggi o per tutta la settimana'}
+              onPress={() => close(() => router.push('/meal-plan'))}
+            />
+            <MenuRow
+              icon="waterdrop-bold-duotone"
+              tint="sky"
+              label="Un bicchiere d’acqua"
+              onPress={() => close(() => onSend({ text: 'Ho bevuto un bicchiere d’acqua' }))}
+            />
+            <MenuRow
               icon="chef-hat-heart-bold-duotone"
               tint="amber"
               label="Idee per il prossimo pasto"
               onPress={() => close(() => onSend({ text: 'Idee per il prossimo pasto' }))}
             />
-            <MenuRow
-              icon="stopwatch-bold-duotone"
-              tint="mint"
-              label="Ricetta veloce e proteica"
-              onPress={() => close(() => onSend({ text: 'Una ricetta veloce e proteica' }))}
-            />
-            <MenuRow
-              icon="cart-large-2-bold-duotone"
-              tint="mint"
-              label="Lista della spesa"
-              onPress={() => close(() => onSend({ text: 'Fammi la lista della spesa' }))}
-            />
-            <MenuRow
-              icon="pie-chart-2-bold-duotone"
-              tint="violet"
-              label="Riepilogo di oggi"
-              onPress={() => close(() => onSend({ text: 'Com’è andata oggi?' }))}
-            />
           </MenuGroup>
         </View>
       ),
     });
+  };
 
   const hasText = text.trim().length > 0;
 

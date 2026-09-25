@@ -1,8 +1,11 @@
 import type { Widget } from '@/lib/types';
 
 import { InsightCard, MacrosCard, TargetsCard, WaterCard, WeekChart } from './DataCards';
+import { FoodFactsCard } from './FactsCard';
 import { GroceryCard, IdeasCarousel, RecipeCard, SwapCard } from './FoodCards';
 import { MealLogCard } from './MealLogCard';
+import { MemoryCard } from './MemoryCard';
+import { MealPlanCard } from './PlanCard';
 
 /** Maps a generative-UI block from the assistant to its interactive card. */
 export function WidgetView({
@@ -37,6 +40,12 @@ export function WidgetView({
       return <TargetsCard before={widget.before} after={widget.after} changes={widget.changes} />;
     case 'swap':
       return <SwapCard from={widget.from} to={widget.to} reason={widget.reason} />;
+    case 'meal_plan':
+      return <MealPlanCard plan={widget.plan} onSend={onSend} />;
+    case 'food_facts':
+      return <FoodFactsCard food={widget.food} widgetKey={widgetKey} />;
+    case 'memory':
+      return <MemoryCard changes={widget.changes} recall={widget.recall} />;
     default:
       return null;
   }

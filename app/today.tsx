@@ -12,7 +12,8 @@ import { Display, Mono, Sans } from '@/components/ui/Typography';
 import { InsightCard, WaterCard } from '@/components/widgets/DataCards';
 import { colors, radii } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
-import { dayTotals, formatKcal, formatTime, mealsOn, mealTotals } from '@/lib/nutrition';
+import { planMealKey, servingsLabel } from '@/lib/mealplan';
+import { dayKey, dayTotals, formatKcal, formatTime, mealsOn, mealTotals } from '@/lib/nutrition';
 import { useNouri } from '@/lib/store';
 import type { Meal } from '@/lib/types';
 import { useAnimatedNumber } from '@/lib/useAnimatedNumber';
@@ -40,6 +41,9 @@ function TodayContent() {
   const send = useSend();
   const sheet = useSheet();
   const logMeal = useNouri((s) => s.logMeal);
+  const plan = useNouri((s) => s.plan);
+  const planLog = useNouri((s) => s.planLog);
+  const planned = plan?.days.find((d) => d.date === dayKey());
 
   const T = profile?.targets ?? { kcal: 2000, protein: 120, carbs: 230, fat: 65, water: 2000 };
   const t = dayTotals(meals);
@@ -241,6 +245,80 @@ function TodayContent() {
           </Card>
         )}
 
+        {plan && planned && (
+          <>
+            <View style={styles.sectionRow}>
+              <Sans size={15} weight="semi">
+                Dal tuo piano
+              </Sans>
+              <Pressable hitSlop={8} onPress={() => router.push('/meal-plan')}>
+                <Sans size={13} weight="medium" color={colors.dim}>
+                  Apri il piano
+                </Sans>
+              </Pressable>
+            </View>
+            <Card>
+              {planned.meals.map((m, i) => {
+                const key = planMealKey(plan.id, planned.date, i);
+                const done = Boolean(planLog[key]);
+                return (
+                  <View key={key} style={[styles.meal, i > 0 && styles.divider]}>
+                    <View style={styles.tile}>
+                      <Sans size={17}>{m.emoji}</Sans>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Sans
+                        size={14}
+                        weight="medium"
+                        numberOfLines={1}
+                        color={done ? colors.faint : colors.ink}>
+                        {m.title}
+                      </Sans>
+                      <Sans size={12} color={colors.faint}>
+                        {m.label} · {formatKcal(m.kcal)} kcal
+                      </Sans>
+                    </View>
+                    {done ? (
+                      <Icon name="check-circle-bold" size={20} color={colors.positive} />
+                    ) : (
+                      <Pressable
+                        accessibilityLabel={`Segna ${m.title} come mangiato`}
+                        onPress={() => {
+                          const meal = logMeal(
+                            {
+                              title: m.title,
+                              emoji: m.emoji,
+                              label: m.label,
+                              items: [
+                                {
+                                  name: m.title,
+                                  emoji: m.emoji,
+                                  qty: servingsLabel(m.servings),
+                                  kcal: m.kcal,
+                                  protein: m.protein,
+                                  carbs: m.carbs,
+                                  fat: m.fat,
+                                },
+                              ],
+                            },
+                            'plan'
+                          );
+                          useNouri.getState().markPlanMeal(key, meal.id);
+                          haptic.success();
+                        }}
+                        style={({ pressed }) => [styles.mark, pressed && { opacity: 0.7 }]}>
+                        <Sans size={13} weight="medium">
+                          Mangiato
+                        </Sans>
+                      </Pressable>
+                    )}
+                  </View>
+                );
+              })}
+            </Card>
+          </>
+        )}
+
         <View style={{ marginTop: 16 }}>
           <InsightCard tone={note.tone} title={note.title} body={note.body} />
         </View>
@@ -270,6 +348,22 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   divider: { borderTopWidth: 1, borderColor: colors.border },
+  sectionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 28,
+    marginBottom: 10,
+  },
+  mark: {
+    paddingHorizontal: 12,
+    height: 32,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   tile: {
     width: 34,
     height: 34,

@@ -2,12 +2,13 @@ import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
-import { IconTile } from '@/components/ui/Icon';
+import { Icon, IconTile } from '@/components/ui/Icon';
 import { Orb } from '@/components/ui/Orb';
 import { Display, Sans } from '@/components/ui/Typography';
-import { colors, radii } from '@/constants/theme';
+import { colors, radii, tints } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
-import { dayTotals, formatKcal, labelForTime } from '@/lib/nutrition';
+import { dayTotals, formatKcal, labelForTime, mealTotals } from '@/lib/nutrition';
+import { logShortcut } from '@/lib/shortcuts';
 import { useNouri } from '@/lib/store';
 
 const QUESTION: Record<ReturnType<typeof labelForTime>, string> = {
@@ -27,6 +28,7 @@ export function Greeting({
 }) {
   const profile = useNouri((s) => s.profile);
   const meals = useNouri((s) => s.meals);
+  const shortcuts = useNouri((s) => s.shortcuts);
   const t = dayTotals(meals);
   const left = Math.max(0, (profile?.targets.kcal ?? 0) - t.kcal);
   const moment = labelForTime();
@@ -79,6 +81,36 @@ export function Greeting({
           onPress={() => onSend('Com’è andata oggi?')}
         />
       </View>
+
+      {shortcuts.length > 0 && (
+        <Animated.View entering={FadeIn.delay(480).duration(400)} style={{ marginTop: 22, gap: 8 }}>
+          <Sans size={12} weight="medium" color={colors.faint} style={{ marginLeft: 2 }}>
+            Le tue scorciatoie
+          </Sans>
+          <View style={styles.shortcuts}>
+            {[...shortcuts]
+              .sort((a, b) => b.uses - a.uses)
+              .slice(0, 4)
+              .map((sc) => (
+                <Pressable
+                  key={sc.id}
+                  onPress={() => logShortcut(sc)}
+                  style={({ pressed }) => [
+                    styles.shortcut,
+                    pressed && { backgroundColor: colors.bgSubtle },
+                  ]}>
+                  <Icon name="bolt-circle-bold-duotone" size={18} color={tints.amber.fg} />
+                  <Sans size={14} weight="medium">
+                    {sc.name}
+                  </Sans>
+                  <Sans size={12} color={colors.faint}>
+                    {formatKcal(mealTotals(sc.meal).kcal)}
+                  </Sans>
+                </Pressable>
+              ))}
+          </View>
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -127,6 +159,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     rowGap: 10,
     marginTop: 32,
+  },
+  shortcuts: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  shortcut: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 38,
+    paddingHorizontal: 12,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
   },
   starter: {
     gap: 14,

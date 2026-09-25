@@ -30,11 +30,18 @@ Chiara, tipografica e silenziosa, a metà tra ElevenLabs e ChatGPT: la conversaz
   - `week`: grafico degli ultimi 7 giorni.
   - `insight`: una nota concreta sui tuoi dati.
   - `targets`: il piano aggiornato, con il prima e il dopo, quando lo cambi parlando.
+  - `meal_plan`: piano pasti di un giorno o di una settimana, con i giorni da scegliere.
+  - `food_facts`: valori nutrizionali di un alimento o prodotto, con la tabella per 100 g.
+  - `memory`: conferma di cosa Nouri ha memorizzato o dimenticato.
+- **Memoria**: Nouri ricorda i cibi che ami (*"adoro il salmone"*), quelli che non ti piacciono (*"odio i funghi"*) e le abitudini (*"ricordati che a pranzo mangio in mensa"*). Li usa in idee, ricette e piani pasti. Si gestisce, e si spegne, da **Memoria** nel menu laterale.
+- **Scorciatoie**: salva un pasto con il segnalibro sulla sua card, oppure scrivendo *"salvalo come colazione solita"*. Poi basta scrivere *"la solita colazione"*, o toccarla dal **+** o dal saluto iniziale, e finisce subito nel diario (con *Annulla* se serve). Funzionano anche con Claude, senza chiamate di rete.
+- **Ricerca rapida dei valori nutrizionali**: la lente nell'header apre una ricerca istantanea. Gli alimenti comuni arrivano subito dalla tabella interna, anche offline; i prodotti confezionati arrivano da [Open Food Facts](https://world.openfoodfacts.org) per nome o per codice a barre. Su iOS e Android c'è lo scanner (`expo-camera`), sul web si possono scrivere le cifre. Scegli la porzione e aggiungi al diario con un tocco.
+- **Piano pasti giornaliero o settimanale**: *"fammi un piano pasti per la settimana"* in chat, oppure **Piano pasti** dal menu. Colazione, pranzo, spuntino e cena calibrati su calorie e macro, senza i cibi che eviti e con più spesso quelli che ami. Stili: bilanciato, più proteine, veloce, leggero. Per ogni piatto puoi segnarlo come mangiato, cambiarlo o aprire la ricetta; la lista della spesa del piano è divisa per reparto. Il piano di oggi compare anche in **Oggi** e nel brief del mattino.
 - **Piano modificabile parlando**: *"voglio mettere massa"*, *"sono diventato vegano"*, *"ora peso 68 kg"*, *"sono intollerante al lattosio"*, *"voglio più proteine"*. Nouri ricalcola i target e mostra cosa è cambiato.
 - **Brief del mattino**: al primo accesso di un nuovo giorno Nouri scrive per primo, con il resoconto di ieri, una nota e le idee per il prossimo pasto.
 - **Foto del piatto**: scatta o carica una foto e Nouri riconosce ingredienti e porzioni.
 - **Modalità voce**: orb a tutto schermo e risposte lette ad alta voce (`expo-speech`). La dettatura usa la Web Speech API su web e il microfono della tastiera su iOS e Android.
-- **Oggi**: anelli concentrici, barre dei macro, acqua, timeline dei pasti e una nota di Nouri.
+- **Oggi**: anelli concentrici, barre dei macro, acqua, timeline dei pasti, i pasti del piano da segnare e una nota di Nouri.
 
 ## Avvio
 
@@ -91,11 +98,16 @@ In produzione aggiungi autenticazione e rate limiting al proxy, e gestisci la ri
 ## Struttura
 
 ```
-app/                 schermate (chat, onboarding, oggi, profilo, voce)
-components/ui/       Orb, Glass/Card/Chip/bottoni, anelli, tipografia
+app/                 schermate (chat, onboarding, oggi, profilo, voce, ricerca, memoria, piano pasti)
+components/ui/       Orb, Glass/Card/Chip/bottoni, anelli, tipografia, sheet, menu, toast
 components/chat/     header, composer, messaggi, testo in streaming, stato "sto pensando"
 components/widgets/  le card generative
-lib/ai/              askNouri() → Claude o motore offline
+components/food/     scheda alimento, tabella nutrizionale, scanner del codice a barre
+lib/ai/              askNouri() → Claude o motore offline (scorciatoie sempre istantanee)
+lib/memory.ts        memoria: gusti, abitudini e scorciatoie
+lib/mealplan.ts      generatore dei piani pasti e lista della spesa
+lib/foodfacts.ts     valori nutrizionali della tabella interna
+lib/foodsearch.ts    Open Food Facts: ricerca per nome e codice a barre
 lib/store.ts         stato persistito (zustand + AsyncStorage)
 constants/theme.ts   design token
 ```
@@ -112,3 +124,5 @@ Per aggiungere un widget:
 - Le stime nutrizionali sono indicative e **non sostituiscono un professionista**. Il prompt di sistema chiede a Claude di non incoraggiare restrizioni e di suggerire un professionista se emergono segnali di disturbi alimentari.
 - Per la dettatura nativa dentro l'app, invece della tastiera, serve una development build con `expo-speech-recognition`.
 - Icone: set Solar di 480 Design, licenza CC BY 4.0.
+- Dati dei prodotti confezionati: Open Food Facts, licenza ODbL.
+- Lo scanner del codice a barre usa `expo-camera`, incluso in Expo Go. Sul web `expo-camera` legge solo i QR code, per questo la versione web mostra la ricerca per nome o per cifre.

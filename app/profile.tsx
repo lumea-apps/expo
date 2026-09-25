@@ -20,6 +20,7 @@ import { colors } from '@/constants/theme';
 import { engineInfo } from '@/lib/ai';
 import { haptic } from '@/lib/haptics';
 import { AVOID_OPTIONS, activityLabels, dietLabels, formatKcal, goalLabels } from '@/lib/nutrition';
+import { planTitle } from '@/lib/mealplan';
 import { updatePlan } from '@/lib/plan';
 import { useNouri } from '@/lib/store';
 import type { Activity, Diet, Goal } from '@/lib/types';
@@ -42,6 +43,10 @@ function ProfileContent() {
   const clearChat = useNouri((s) => s.clearChat);
   const seedDemoWeek = useNouri((s) => s.seedDemoWeek);
   const resetAll = useNouri((s) => s.resetAll);
+  const memoryOn = useNouri((s) => s.memoryOn);
+  const memories = useNouri((s) => s.memories);
+  const shortcuts = useNouri((s) => s.shortcuts);
+  const plan = useNouri((s) => s.plan);
 
   if (!profile) return null;
   const T = profile.targets;
@@ -223,6 +228,31 @@ function ProfileContent() {
         </MenuGroup>
 
         <MenuGroup
+          title="Memoria e piano pasti"
+          footer="Nouri ricorda i tuoi gusti e le scorciatoie, e prepara piani per il giorno o la settimana.">
+          <MenuRow
+            icon="brain-bold-duotone"
+            tint="violet"
+            label="Memoria"
+            value={
+              memoryOn
+                ? `${memories.length} ${memories.length === 1 ? 'ricordo' : 'ricordi'}${shortcuts.length ? ` · ${shortcuts.length} scorc.` : ''}`
+                : 'Spenta'
+            }
+            chevron
+            onPress={() => router.push('/memory')}
+          />
+          <MenuRow
+            icon="calendar-bold-duotone"
+            tint="violet"
+            label="Piano pasti"
+            value={plan ? planTitle(plan) : 'Nessuno'}
+            chevron
+            onPress={() => router.push('/meal-plan')}
+          />
+        </MenuGroup>
+
+        <MenuGroup
           title="Assistente"
           footer={
             engineInfo.id === 'local'
@@ -248,6 +278,8 @@ function ProfileContent() {
                 }}
                 trackColor={{ true: colors.ink, false: colors.bgMuted }}
                 thumbColor={colors.bg}
+                // react-native-web colours the "on" thumb with its own prop
+                {...({ activeThumbColor: colors.bg } as object)}
               />
             }
           />
@@ -286,7 +318,7 @@ function ProfileContent() {
             onPress={() =>
               confirm(
                 'Ricominciare da capo?',
-                'Cancelliamo profilo, diario e conversazione.',
+                'Cancelliamo profilo, diario, memoria, piano pasti e conversazione.',
                 'Ricomincia',
                 () => {
                   resetAll();

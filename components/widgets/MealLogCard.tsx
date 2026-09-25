@@ -2,8 +2,10 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
+import { ShortcutEditor } from '@/components/memory/ShortcutEditor';
 import { Icon } from '@/components/ui/Icon';
-import { Card, PrimaryButton } from '@/components/ui/Surface';
+import { useSheet } from '@/components/ui/Sheet';
+import { Card, IconButton, PrimaryButton } from '@/components/ui/Surface';
 import { Mono, Sans } from '@/components/ui/Typography';
 import { colors, radii } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
@@ -43,13 +45,27 @@ export function MealLogCard({
   const loggedId = useNouri((s) => s.logged[widgetKey]);
   const loggedMeal = useNouri((s) => s.meals.find((m) => m.id === loggedId));
   const logMeal = useNouri((s) => s.logMeal);
+  const removeMeal = useNouri((s) => s.removeMeal);
+  const sheet = useSheet();
   const [mult, setMult] = useState<number[]>(() => meal.items.map(() => 1));
+  const [savedAs, setSavedAs] = useState<string | null>(null);
 
   const items = useMemo(
     () => meal.items.map((it, i) => scale(it, mult[i] ?? 1)),
     [meal.items, mult]
   );
   const tot = mealTotals({ items });
+  const saveShortcut = () =>
+    sheet.open({
+      title: 'Salva come scorciatoia',
+      render: (close) => (
+        <ShortcutEditor
+          meal={{ ...meal, items: loggedMeal?.items ?? items }}
+          close={close}
+          onSaved={setSavedAs}
+        />
+      ),
+    });
   const macroKcal = tot.protein * 4 + tot.carbs * 4 + tot.fat * 9 || 1;
   const locked = Boolean(loggedId);
 
@@ -129,24 +145,55 @@ export function MealLogCard({
         {locked ? (
           <Animated.View entering={FadeIn} style={styles.logged}>
             <Icon name="check-circle-bold" size={18} color={colors.positive} />
-            <Sans size={14} weight="medium" color={colors.positive}>
+            <Sans size={14} weight="medium" color={colors.positive} style={{ flex: 1 }}>
               Nel diario{loggedMeal ? ` alle ${formatTime(loggedMeal.at)}` : ''}
             </Sans>
+            <Pressable
+              hitSlop={8}
+              onPress={() => {
+                haptic.tap();
+                if (loggedId) removeMeal(loggedId);
+              }}>
+              <Sans size={14} weight="medium" color={colors.dim}>
+                Annulla
+              </Sans>
+            </Pressable>
+            {!savedAs && (
+              <IconButton label="Salva come scorciatoia" size={34} onPress={() => saveShortcut()}>
+                <Icon name="bookmark-linear" size={19} color={colors.dim} />
+              </IconButton>
+            )}
           </Animated.View>
         ) : (
           <>
             <Sans size={12} color={colors.faint} center style={{ marginBottom: 10 }}>
               Tocca una voce per cambiare la porzione
             </Sans>
-            <PrimaryButton
-              label="Aggiungi al diario"
-              style={{ height: 46 }}
-              onPress={() => {
-                logMeal({ ...meal, items }, photo ? 'photo' : 'chat', widgetKey);
-                haptic.success();
-              }}
-            />
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {!savedAs && (
+                <IconButton
+                  label="Salva come scorciatoia"
+                  size={46}
+                  onPress={() => saveShortcut()}
+                  style={styles.save}>
+                  <Icon name="bookmark-linear" size={20} />
+                </IconButton>
+              )}
+              <PrimaryButton
+                label="Aggiungi al diario"
+                style={{ height: 46, flex: 1 }}
+                onPress={() => {
+                  logMeal({ ...meal, items }, photo ? 'photo' : 'chat', widgetKey);
+                  haptic.success();
+                }}
+              />
+            </View>
           </>
+        )}
+        {savedAs && (
+          <Sans size={12} color={colors.faint} center style={{ marginTop: 8 }}>
+            Salvata come scorciatoia «{savedAs}»
+          </Sans>
         )}
       </View>
     </Card>
@@ -199,8 +246,8 @@ const styles = StyleSheet.create({
   logged: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+    gap: 10,
     height: 38,
   },
+  save: { borderWidth: 1, borderColor: colors.borderStrong },
 });

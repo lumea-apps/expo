@@ -21,6 +21,14 @@
           "cameraPermission": "Nouri usa la fotocamera per fotografare i piatti e stimarne i valori nutrizionali."
         }
       ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Nouri usa la fotocamera per leggere il codice a barre dei prodotti e fotografare i piatti.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
       "expo-web-browser"
     ],
     "experiments": {

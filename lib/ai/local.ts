@@ -3,7 +3,18 @@
  * the same generative-UI blocks Claude produces. It keeps the app fully usable
  * with no API key and makes a great fallback when the network is down.
  */
-import { capitalize, findFood, normalize, parseFoods } from '../foods';
+import { fromFoodEntry, nutrientsFor } from '../foodfacts';
+import { capitalize, findFood, normalize, parseFoods, type FoodEntry } from '../foods';
+import {
+  dayName,
+  generatePlan,
+  planDayTotals,
+  planGrocery,
+  planTitle,
+  recipePool,
+  recipeText,
+} from '../mealplan';
+import { joinList, likesIn, matchShortcut, parseMemory, parseShortcutName } from '../memory';
 import {
   dayKey,
   dayTotals,
@@ -18,34 +29,80 @@ import { findRecipe, RECIPES, type RecipeEntry } from '../recipes';
 import type {
   AssistantTurn,
   FoodItem,
+  MealDraft,
   MealLabel,
-  Profile,
+  MealPlan,
+  MemoryOps,
+  PlanFocus,
   ProfilePatch,
+  Shortcut,
   SwapFood,
   Widget,
 } from '../types';
 import type { BrainContext, BrainReply, UserInput } from './types';
 
-type Turn = AssistantTurn & { waterMl?: number; profilePatch?: ProfilePatch };
+type Turn = AssistantTurn & {
+  waterMl?: number;
+  profilePatch?: ProfilePatch;
+  memory?: MemoryOps;
+  autoLog?: BrainReply['autoLog'];
+};
 
-export function localRespond(input: UserInput, ctx: BrainContext): BrainReply {
-  const turn = route(input, ctx);
+function toReply(turn: Turn): BrainReply {
   return {
     text: turn.text,
     widgets: turn.widgets,
     suggestions: turn.suggestions,
     waterMl: turn.waterMl ?? 0,
     profilePatch: turn.profilePatch,
+    memory: turn.memory,
+    autoLog: turn.autoLog,
     engine: 'local',
   };
+}
+
+export function localRespond(input: UserInput, ctx: BrainContext): BrainReply {
+  return quickRespond(input, ctx) ?? toReply(route(input, ctx));
+}
+
+/**
+ * Answers that never need the network, whatever the engine: saving a meal as a
+ * shortcut and using one ("la solita colazione").
+ */
+export function quickRespond(input: UserInput, ctx: BrainContext): BrainReply | null {
+  if (input.image) return null;
+  const name = parseShortcutName(input.text);
+  if (name) return toReply(shortcutSaveTurn(name, ctx));
+  const t = normalize(input.text);
+  if (/\b(non|domani|ieri|salto|saltare|senza|quanto|quante)\b/.test(t) || input.text.includes('?'))
+    return null;
+  const sc = matchShortcut(input.text, ctx.shortcuts);
+  return sc ? toReply(shortcutUseTurn(sc, t)) : null;
 }
 
 function route(input: UserInput, ctx: BrainContext): Turn {
   const t = normalize(input.text);
   if (input.image) return photoTurn(input, ctx);
 
+  const planRequest = parsePlanRequest(t, ctx);
+  if (planRequest) return mealPlanTurn(planRequest, ctx);
+
+  const memory = parseMemory(input.text);
   const patch = parsePlanChange(t);
-  if (patch) return planTurn(patch, ctx);
+  if (patch)
+    return { ...planTurn(patch, ctx), memory: ctx.memoryOn ? (memory ?? undefined) : undefined };
+  if (memory) return memoryTurn(memory, ctx);
+  if (
+    /(cosa (ti )?ricordi|cosa sai) (di me|dei miei gusti)|la mia memoria|cosa hai memorizzato/.test(
+      t
+    )
+  )
+    return recallTurn(ctx);
+
+  if (FACTS_RE.test(t) && !/(mi (restano|mancano|rimangono)|ho mangiato|ho bevuto)/.test(t)) {
+    const food = findFood(input.text);
+    if (food) return factsTurn(food, t, ctx);
+  }
 
   const water = parseWater(t);
   const foods = parseFoods(input.text).filter((f) => !(water && /acqua/.test(f.name)));
@@ -64,7 +121,7 @@ function route(input: UserInput, ctx: BrainContext): Turn {
       ctx
     );
   }
-  if (/(spesa|lista|supermercato)/.test(t)) return groceryTurn(ctx);
+  if (/(spesa|lista|supermercato)/.test(t)) return groceryTurn(ctx, t);
   if (/(invece d|alternativ|sostitu|al posto d|swap|piu leggero di)/.test(t))
     return swapTurn(t, ctx);
   if (water && !foods.length) return waterTurn(ctx, water);
@@ -146,17 +203,13 @@ function parseWater(t: string): number {
   return 0;
 }
 
-function allowed(r: RecipeEntry, p: Profile): boolean {
-  return r.diets.includes(p.diet) && !r.avoidTags.some((a) => p.avoid.includes(a));
-}
-
 function pickRecipes(
   ctx: BrainContext,
   moment: MealLabel,
   opts: { light?: boolean; protein?: boolean; quick?: boolean } = {}
 ): RecipeEntry[] {
   const left = remaining(ctx);
-  const allowedPool = RECIPES.filter((r) => allowed(r, ctx.profile));
+  const allowedPool = recipePool(ctx.profile, ctx.memories);
   const inMoment = allowedPool.filter((r) => r.moments.includes(moment));
   const pool = inMoment.length >= 3 ? inMoment : allowedPool;
   const scored = pool
@@ -167,6 +220,7 @@ function pickRecipes(
       if (left.protein > 30 || opts.protein) score += r.protein / 18;
       if (opts.light) score -= r.kcal / 180;
       if (opts.quick) score -= r.minutes / 6;
+      score += likesIn(recipeText(r), ctx.memories).length * 1.2;
       return { r, score };
     })
     .sort((a, b) => b.score - a.score);
@@ -609,7 +663,20 @@ function waterTurn(ctx: BrainContext, ml: number): Turn {
   };
 }
 
-function groceryTurn(ctx: BrainContext): Turn {
+function groceryTurn(ctx: BrainContext, t: string): Turn {
+  const plan = activePlan(ctx);
+  const recentRecipe = ctx.history
+    .slice(-6)
+    .some((m) => m.widgets?.some((w) => w.type === 'recipe'));
+  if (plan && (/(piano|menu|settiman)/.test(t) || !recentRecipe)) {
+    const sections = planGrocery(plan);
+    const count = sections.reduce((a, s) => a + s.items.length, 0);
+    return {
+      text: `Ecco la spesa per il tuo piano ${plan.kind === 'week' ? 'della settimana' : 'di oggi'}: **${count} cose**, divise per reparto. Spunta man mano che riempi il carrello.`,
+      widgets: [{ type: 'grocery', sections }],
+      suggestions: ['Com’è andata oggi?', 'Piano di oggi', 'Idee per uno spuntino'],
+    };
+  }
   const lastRecipe = [...ctx.history]
     .reverse()
     .flatMap((m) => m.widgets ?? [])
@@ -729,6 +796,290 @@ function swapTurn(t: string, ctx: BrainContext): Turn {
       'Altre idee leggere',
       `Registra ${swap.to.name.toLowerCase()}`,
     ],
+  };
+}
+
+// ——— memory & shortcuts ———
+
+function slotIn(t: string): MealLabel | null {
+  if (/colazione/.test(t)) return 'Colazione';
+  if (/pranzo/.test(t)) return 'Pranzo';
+  if (/cena/.test(t)) return 'Cena';
+  if (/spuntino|merenda/.test(t)) return 'Spuntino';
+  return null;
+}
+
+/** The reply for a shortcut, also used when it is tapped from a menu. */
+export function shortcutUseTurn(sc: Shortcut, t = ''): Turn {
+  const meal: MealDraft = { ...sc.meal, label: slotIn(t) ?? sc.meal.label };
+  const tot = mealTotals(meal);
+  return {
+    text: `Fatto: **${sc.name}** è nel diario, **${formatKcal(tot.kcal)} kcal** e **${tot.protein} g di proteine**. Se oggi era diversa, tocca *Annulla* e raccontamela.`,
+    widgets: [{ type: 'meal_log', meal }],
+    suggestions: [
+      'Com’è andata oggi?',
+      `Idee per ${momentWord(nextMoment(meal.label))}`,
+      'Ho bevuto un bicchiere d’acqua',
+    ],
+    autoLog: { shortcutId: sc.id },
+  };
+}
+
+/** The meal to save as a shortcut: the latest one logged or estimated in chat. */
+function lastMeal(ctx: BrainContext): MealDraft | null {
+  const card = [...ctx.history]
+    .reverse()
+    .find((m) => m.role === 'assistant' && m.widgets?.some((w) => w.type === 'meal_log'));
+  const cardMeal = card?.widgets?.find(
+    (w): w is Extract<Widget, { type: 'meal_log' }> => w.type === 'meal_log'
+  )?.meal;
+  const logged = [...ctx.meals].sort((a, b) => b.at.localeCompare(a.at))[0];
+  if (logged && (!card || logged.at >= card.at)) {
+    const { title, emoji, label, items } = logged;
+    return { title, emoji, label, items };
+  }
+  return cardMeal ?? null;
+}
+
+function shortcutSaveTurn(name: string, ctx: BrainContext): Turn {
+  const found = lastMeal(ctx);
+  const meal = found ? { ...found } : null;
+  if (!meal) {
+    return {
+      text: 'Non trovo un pasto da salvare. Raccontami cosa hai mangiato e poi dimmi *«salvalo come colazione solita»*: da lì in poi basterà il nome.',
+      widgets: [],
+      suggestions: ['Yogurt greco, granola e caffè', 'Com’è andata oggi?'],
+    };
+  }
+  const slot = slotIn(normalize(name));
+  if (slot) meal.label = slot;
+  const tot = mealTotals(meal);
+  return {
+    text: `Salvato come scorciatoia **${name}** (${formatKcal(tot.kcal)} kcal). La prossima volta basta scrivere *«${name.toLowerCase()}»* o toccarla dal **+**.`,
+    widgets: [],
+    suggestions: ['Com’è andata oggi?', `Idee per ${momentWord(nextMoment(meal.label))}`],
+    memory: { shortcut: { name, meal } },
+  };
+}
+
+function memoryTurn(ops: MemoryOps, ctx: BrainContext): Turn {
+  const moment = labelForTime();
+  if (!ctx.memoryOn) {
+    return {
+      text: 'La memoria è spenta, quindi non me lo segno. Puoi riattivarla da **Profilo › Memoria** quando vuoi.',
+      widgets: [],
+      suggestions: [`Idee per ${momentWord(moment)}`, 'Com’è andata oggi?'],
+    };
+  }
+  if (ops.forget?.length) {
+    return {
+      text: `Fatto, dimentico ${joinList(ops.forget.map((f) => f.toLowerCase()))}.`,
+      widgets: [],
+      suggestions: ['Cosa ricordi di me?', `Idee per ${momentWord(moment)}`],
+      memory: ops,
+    };
+  }
+  const of = (k: 'like' | 'dislike' | 'note') =>
+    (ops.add ?? []).filter((a) => a.kind === k).map((a) => a.text);
+  const likes = of('like');
+  const dislikes = of('dislike');
+  const parts: string[] = [];
+  if (dislikes.length)
+    parts.push(
+      `Segnato: niente ${joinList(dislikes.map((d) => d.toLowerCase()))} nelle mie idee e nei piani pasti.`
+    );
+  if (likes.length)
+    parts.push(
+      `${capitalize(joinList(likes.map((l) => l.toLowerCase())))} ${likes.length > 1 ? 'compariranno' : 'comparirà'} più spesso nelle mie proposte.`
+    );
+  if (of('note').length) parts.push('Me lo ricordo.');
+
+  const widgets: Widget[] = [];
+  if (likes.length) {
+    const loved = likes.map((text) => ({ id: '', kind: 'like' as const, text, at: '' }));
+    const picks = recipePool(ctx.profile, ctx.memories)
+      .filter((r) => likesIn(recipeText(r), loved).length)
+      .slice(0, 3);
+    if (picks.length) {
+      widgets.push({ type: 'ideas', ideas: picks.map(toIdea) });
+      parts.push('Per cominciare:');
+    }
+  }
+  return {
+    text: parts.join(' '),
+    widgets,
+    suggestions: ['Fammi un piano pasti', 'Cosa ricordi di me?', `Idee per ${momentWord(moment)}`],
+    memory: ops,
+  };
+}
+
+function recallTurn(ctx: BrainContext): Turn {
+  if (!ctx.memoryOn) {
+    return {
+      text: 'La memoria è spenta: non sto tenendo traccia dei tuoi gusti. Puoi riattivarla da **Profilo › Memoria**.',
+      widgets: [],
+      suggestions: ['Com’è andata oggi?'],
+    };
+  }
+  const changes = [
+    ...ctx.memories.map((m) => ({ kind: m.kind, text: m.text })),
+    ...ctx.shortcuts.map((s) => ({ kind: 'shortcut' as const, text: s.name })),
+  ];
+  if (!changes.length) {
+    return {
+      text: 'Per ora non ho niente in memoria. Dimmi cosa ti piace e cosa no (*«odio i funghi»*, *«adoro il salmone»*) e ne terrò conto in idee e piani pasti.',
+      widgets: [],
+      suggestions: ['Adoro il salmone', 'Non mi piacciono i funghi', 'Fammi un piano pasti'],
+    };
+  }
+  return {
+    text: 'Ecco cosa so di te. Tocca **Gestisci** per cambiare qualcosa, o dimmelo qui (*«dimentica il salmone»*).',
+    widgets: [{ type: 'memory', changes, recall: true }],
+    suggestions: ['Fammi un piano pasti', `Idee per ${momentWord(labelForTime())}`],
+  };
+}
+
+// ——— meal plans ———
+
+interface PlanRequest {
+  kind: 'day' | 'week';
+  focus: PlanFocus;
+  tomorrow: boolean;
+  fresh: boolean;
+}
+
+function activePlan(ctx: BrainContext): MealPlan | null {
+  const today = dayKey();
+  return ctx.plan && ctx.plan.days.some((d) => d.date >= today) ? ctx.plan : null;
+}
+
+function parsePlanRequest(t: string, ctx: BrainContext): PlanRequest | null {
+  const explicit =
+    /(piano (pasti|alimentare|settimanale|giornaliero|della settimana|(di|per) (oggi|domani|la settimana|la prossima settimana|stasera))|piano dei pasti|meal ?plan|menu (settimanale|della settimana|(di|per) (oggi|domani|la settimana))|programma(re|mi)? (i |dei )?pasti|pianifica(re|mi)? (i |la )?(pasti|settimana)|organizza(re|mi)? (i |la )?(pasti|settimana)|cosa mangio (domani|questa settimana|la prossima settimana|nei prossimi giorni))/.test(
+      t
+    );
+  const followUp =
+    Boolean(ctx.plan) &&
+    /((rifai|rigenera|cambia|un altro|nuovo) (il |un )?(piano|menu)|(piano|menu) (piu|con piu) (proteic|proteine|veloce|leggero)|piu (proteine|veloce|leggero) nel (piano|menu))/.test(
+      t
+    );
+  if (!explicit && !followUp) return null;
+  const week =
+    /(settiman|7 giorni|sette giorni|prossimi giorni)/.test(t) ||
+    (followUp && !/(oggi|domani|giorn)/.test(t) && ctx.plan?.kind === 'week');
+  const focus: PlanFocus = /(protein|massa)/.test(t)
+    ? 'protein'
+    : /(veloc|rapid|poco tempo)/.test(t)
+      ? 'quick'
+      : /(legger|dimagr|light)/.test(t)
+        ? 'light'
+        : 'balanced';
+  return {
+    kind: week ? 'week' : 'day',
+    focus,
+    tomorrow: !week && /domani/.test(t),
+    fresh:
+      followUp ||
+      /(nuovo|rifai|rigenera|crea|fammi|fai|genera|prepara|organizza|pianifica|programma|un altro|diverso|voglio|vorrei|mi serve|dammi)/.test(
+        t
+      ),
+  };
+}
+
+function mealPlanTurn(req: PlanRequest, ctx: BrainContext): Turn {
+  const target = new Date();
+  if (req.tomorrow) target.setDate(target.getDate() + 1);
+  const key = dayKey(target);
+  const current = activePlan(ctx);
+
+  // "Piano di oggi" with a plan already in place: show it instead of making a new one.
+  if (!req.fresh && current) {
+    const day = current.days.find((d) => d.date === key);
+    if (req.kind === 'day' && day) {
+      const tot = planDayTotals(day);
+      return {
+        text: `${dayName(key)} dal tuo piano: **${formatKcal(tot.kcal)} kcal** e **${Math.round(tot.protein)} g di proteine**. Tocca un piatto per la ricetta.`,
+        widgets: [{ type: 'meal_plan', plan: { ...current, kind: 'day', days: [day] } }],
+        suggestions: ['Lista della spesa del piano', 'Rifai il piano', 'Com’è andata oggi?'],
+      };
+    }
+    if (req.kind === 'week' && current.kind === 'week') {
+      return {
+        text: 'Ecco la tua settimana. Scegli un giorno per vedere i pasti, o tocca un piatto per la ricetta.',
+        widgets: [{ type: 'meal_plan', plan: current }],
+        suggestions: ['Lista della spesa del piano', 'Rifai il piano', 'Piano di oggi'],
+      };
+    }
+  }
+
+  const plan = generatePlan({
+    profile: ctx.profile,
+    memories: ctx.memories,
+    kind: req.kind,
+    focus: req.focus,
+    start: target,
+  });
+  const T = ctx.profile.targets;
+  const totals = plan.days.map(planDayTotals);
+  const avgKcal = totals.reduce((a, d) => a + d.kcal, 0) / totals.length;
+  const avgProtein = totals.reduce((a, d) => a + d.protein, 0) / totals.length;
+  const distinct = new Set(plan.days.flatMap((d) => d.meals.map((m) => m.title))).size;
+
+  const notes: string[] = [];
+  const skipped = [
+    ...ctx.profile.avoid.map((a) => a.toLowerCase()),
+    ...ctx.memories.filter((m) => m.kind === 'dislike').map((m) => m.text.toLowerCase()),
+  ];
+  if (skipped.length) notes.push(`Ho lasciato fuori ${joinList(skipped)}.`);
+  const loved = [
+    ...new Set(
+      plan.days.flatMap((d) => d.meals.flatMap((m) => likesIn(recipeText(m), ctx.memories)))
+    ),
+  ];
+  if (loved.length) notes.push(`E c’è spazio per ${joinList(loved.map((l) => l.toLowerCase()))}.`);
+
+  const lead =
+    plan.kind === 'week'
+      ? `Ecco la tua settimana: **${distinct} piatti diversi**, in media **${formatKcal(avgKcal)} kcal** e **${Math.round(avgProtein)} g di proteine** al giorno (obiettivo ${formatKcal(T.kcal)}).`
+      : `${planTitle(plan)}: **${formatKcal(avgKcal)} kcal** e **${Math.round(avgProtein)} g di proteine**, su un obiettivo di ${formatKcal(T.kcal)}.`;
+  return {
+    text: `${lead} ${notes.join(' ')} Tocca un piatto per la ricetta, o apri il piano per segnare cosa mangi.`.replace(
+      /\s+/g,
+      ' '
+    ),
+    widgets: [{ type: 'meal_plan', plan }],
+    suggestions: [
+      'Lista della spesa del piano',
+      'Rifai il piano',
+      plan.kind === 'week' ? 'Piano di oggi' : 'Piano per la settimana',
+    ],
+  };
+}
+
+// ——— nutrition facts ———
+
+const FACTS_RE =
+  /(quant[ei] (calorie|kcal|proteine|carboidrati|grassi|zuccheri)|valori nutrizionali|informazioni nutrizionali|tabella nutrizionale|macro (di|del|della|dello|dei|delle|degli)|e (calorico|calorica|proteico|proteica)|fa ingrassare|quanto ingrassa)/;
+
+function factsTurn(food: FoodEntry, t: string, ctx: BrainContext): Turn {
+  const facts = fromFoodEntry(food);
+  const g = t.match(/(\d+)\s*(?:g|gr|grammi)\b/);
+  if (g && Number(g[1]) > 0) facts.portion = { label: `${g[1]} g`, grams: Number(g[1]) };
+  const n = nutrientsFor(facts, facts.portion.grams);
+  const pShare = (n.protein * 4) / Math.max(1, n.kcal);
+  const fShare = (n.fat * 9) / Math.max(1, n.kcal);
+  const note =
+    pShare >= 0.3
+      ? ' Ottima fonte di proteine.'
+      : fShare >= 0.55
+        ? ' Sono soprattutto grassi: occhio alle porzioni.'
+        : '';
+  const left = remaining(ctx).kcal;
+  const g1 = (v: number) => v.toLocaleString('it-IT', { maximumFractionDigits: 1 });
+  return {
+    text: `**${facts.name}**, ${facts.portion.label}: **${formatKcal(n.kcal)} kcal**, ${g1(n.protein)} g di proteine, ${g1(n.carbs)} g di carboidrati e ${g1(n.fat)} g di grassi.${note}${left > 0 && n.kcal > left ? ` Oggi ti restano ${formatKcal(left)} kcal.` : ''}`,
+    widgets: [{ type: 'food_facts', food: facts }],
+    suggestions: [`Alternativa a ${food.key}`, 'Com’è andata oggi?'],
   };
 }
 
@@ -891,10 +1242,17 @@ export function dailyBrief(ctx: BrainContext): BrainReply {
     }
   }
 
-  const picks = pickRecipes(ctx, moment, { protein: proteinFocus }).slice(0, 3);
-  if (picks.length) widgets.push({ type: 'ideas', ideas: picks.map(toIdea) });
+  const planned = ctx.plan?.days.find((d) => d.date === dayKey());
+  if (planned && ctx.plan) {
+    widgets.push({ type: 'meal_plan', plan: { ...ctx.plan, kind: 'day', days: [planned] } });
+  } else {
+    const picks = pickRecipes(ctx, moment, { protein: proteinFocus }).slice(0, 3);
+    if (picks.length) widgets.push({ type: 'ideas', ideas: picks.map(toIdea) });
+  }
   return {
-    text: `${text} Ecco da dove partirei per ${momentWord(moment)}:`,
+    text: planned
+      ? `${text} Ecco cosa prevede il tuo piano per oggi:`
+      : `${text} Ecco da dove partirei per ${momentWord(moment)}:`,
     widgets,
     suggestions: [
       'Com’è andata la settimana?',

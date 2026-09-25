@@ -13,7 +13,7 @@ import { haptic } from '@/lib/haptics';
 import { dayTotals, formatKcal } from '@/lib/nutrition';
 import { useNouri } from '@/lib/store';
 
-/** Top bar: menu, wordmark and today's calories (opens "Oggi"). */
+/** Top bar: menu, wordmark, quick search and today's calories (opens "Oggi"). */
 export function ChatHeader({ onMenu }: { onMenu: () => void }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -42,6 +42,13 @@ export function ChatHeader({ onMenu }: { onMenu: () => void }) {
           </Sans>
         </View>
 
+        <IconButton
+          label="Cerca valori nutrizionali"
+          size={36}
+          onPress={() => router.push('/search')}
+          style={styles.search}>
+          <Icon name="magnifer-linear" size={19} />
+        </IconButton>
         <Pressable
           accessibilityLabel="Apri la giornata"
           onPress={() => {
@@ -79,6 +86,7 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   brand: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  search: { backgroundColor: colors.bgSubtle, borderWidth: 1, borderColor: colors.border },
   pulse: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -20,7 +20,8 @@
           "photosPermission": "Nouri usa le tue foto per riconoscere i piatti e stimarne i valori nutrizionali.",
           "cameraPermission": "Nouri usa la fotocamera per fotografare i piatti e stimarne i valori nutrizionali."
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

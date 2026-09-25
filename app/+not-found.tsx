@@ -1,36 +1,7 @@
-import { Link, Stack } from 'expo-router';
-import { View } from 'react-native';
+import { Redirect } from 'expo-router';
 
-import { Aurora } from '@/components/ui/Aurora';
-import { Mono, Serif } from '@/components/ui/Typography';
-import { colors } from '@/constants/theme';
-
+// Any unknown path (a stale deep link, or the page URL when the web build is
+// hosted under a sub-path) simply lands on the conversation.
 export default function NotFoundScreen() {
-  return (
-    <>
-      <Stack.Screen options={{ title: 'Oops!' }} />
-      <View
-        style={{
-          flex: 1,
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 24,
-          backgroundColor: colors.bg,
-        }}>
-        <Aurora preset="calm" />
-        <Serif size={40} center>
-          Questa pagina{' '}
-          <Serif size={40} italic color={colors.lime}>
-            non esiste
-          </Serif>
-          .
-        </Serif>
-        <Link href="/" style={{ marginTop: 20 }}>
-          <Mono upper size={12} color={colors.lime}>
-            Torna da Nouri →
-          </Mono>
-        </Link>
-      </View>
-    </>
-  );
+  return <Redirect href="/" />;
 }

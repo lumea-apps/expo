@@ -2,6 +2,7 @@ import type { Widget } from '@/lib/types';
 
 import { InsightCard, MacrosCard, TargetsCard, WaterCard, WeekChart } from './DataCards';
 import { FoodFactsCard } from './FactsCard';
+import { GoalCard } from './GoalCard';
 import { GroceryCard, IdeasCarousel, RecipeCard, SwapCard } from './FoodCards';
 import { MealLogCard } from './MealLogCard';
 import { MemoryCard } from './MemoryCard';
@@ -13,16 +14,27 @@ export function WidgetView({
   widget,
   widgetKey,
   onSend,
-  fromPhoto,
+  photoUri,
+  animate,
 }: {
   widget: Widget;
   widgetKey: string;
   onSend: (text: string) => void;
-  fromPhoto?: boolean;
+  /** The photo the reply is about, if any. */
+  photoUri?: string;
+  /** Fresh reply: play the entrance animations. */
+  animate?: boolean;
 }) {
   switch (widget.type) {
     case 'meal_log':
-      return <MealLogCard meal={widget.meal} widgetKey={widgetKey} photo={fromPhoto} />;
+      return (
+        <MealLogCard
+          meal={widget.meal}
+          widgetKey={widgetKey}
+          photoUri={photoUri}
+          animate={animate}
+        />
+      );
     case 'macros':
       return <MacrosCard />;
     case 'recipe':
@@ -49,6 +61,8 @@ export function WidgetView({
       return <FoodFactsCard food={widget.food} widgetKey={widgetKey} />;
     case 'memory':
       return <MemoryCard changes={widget.changes} recall={widget.recall} />;
+    case 'goal':
+      return <GoalCard onAction={onSend} animate={animate} />;
     case 'workout_plan':
       return <WorkoutPlanCard plan={widget.plan} sessionId={widget.sessionId} onSend={onSend} />;
     case 'exercise':

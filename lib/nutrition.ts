@@ -164,6 +164,8 @@ export function applyProfilePatch(
 
   if (patch.goal && patch.goal !== profile.goal) {
     next.goal = patch.goal;
+    // "perdere 4 kg" doesn't carry over to a different goal
+    delete next.aimKg;
     changes.push(`Obiettivo · ${goalLabels[patch.goal]}`);
   }
   if (patch.diet && patch.diet !== profile.diet) {

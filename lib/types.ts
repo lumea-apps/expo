@@ -15,14 +15,50 @@ export interface Targets extends Macros {
 }
 
 /** Onboarding answers saved step by step, so an interrupted onboarding resumes where it was. */
+// ——— conversational onboarding ———
+
+/** The question Nouri is waiting an answer to. */
+export type FactKey = 'name' | 'goal' | 'food' | 'body';
+
+export interface Facts {
+  name?: string;
+  goal?: Goal;
+  /** Kilos to lose or gain, when the user says it. */
+  aimKg?: number;
+  /** "Vorrei arrivare a 65 kg": turned into aimKg once the weight is known. */
+  targetWeight?: number;
+  diet?: Diet;
+  avoid?: string[];
+  /** null = prefers not to say. */
+  weight?: number | null;
+  activity?: Activity;
+  /** Mentions training (gym, running, sport). */
+  trains?: boolean;
+  likes?: string[];
+  dislikes?: string[];
+}
+
+/** One line of "what I understood", shown under Nouri's reply. */
+export interface Capture {
+  key: 'name' | 'goal' | 'diet' | 'avoid' | 'weight' | 'activity' | 'like' | 'dislike';
+  label: string;
+}
+
+export interface OnboardingMessage {
+  id: string;
+  role: 'assistant' | 'user';
+  text: string;
+  captures?: Capture[];
+  /** The goal card closes the onboarding. */
+  goalCard?: boolean;
+}
+
+/** Onboarding in progress: the conversation so far and what was understood. */
 export interface OnboardingDraft {
-  step: 'name' | 'goal' | 'diet' | 'avoid' | 'weight' | 'activity';
-  name: string;
-  goal: Goal;
-  diet: Diet;
-  avoid: string[];
-  weight: string;
-  activity: Activity;
+  messages: OnboardingMessage[];
+  facts: Facts;
+  asked: FactKey | null;
+  chips: string[];
 }
 
 export interface Profile {
@@ -32,6 +68,10 @@ export interface Profile {
   avoid: string[];
   weight: number | null;
   activity: Activity;
+  /** Kilos to lose or gain, when said during onboarding. */
+  aimKg?: number;
+  /** Said during onboarding that they train (gym, running, sport). */
+  trains?: boolean;
   targets: Targets;
   createdAt: string;
 }
@@ -271,6 +311,8 @@ export type Widget =
   | { type: 'food_facts'; food: FoodFacts }
   | { type: 'memory'; changes: MemoryChange[]; recall?: boolean }
   | { type: 'workout_plan'; plan: WorkoutPlan; sessionId?: string }
+  /** The goal card ("scheda obiettivo"), drawn from the live profile. */
+  | { type: 'goal' }
   | { type: 'exercise'; exercise: ExerciseCard }
   | { type: 'exercises'; title: string; items: { id: string; name: string; muscles: string[] }[] };
 

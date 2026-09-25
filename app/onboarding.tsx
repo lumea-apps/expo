@@ -1,51 +1,70 @@
 import { Redirect, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
-  Pressable,
+  ScrollView,
   StyleSheet,
   TextInput,
   View,
 } from 'react-native';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { RichText } from '@/components/chat/RichText';
+import { Thinking } from '@/components/chat/Thinking';
 import { Icon, IconTile, type IconName } from '@/components/ui/Icon';
-import { MacroBar } from '@/components/ui/MacroRing';
-import { Orb, type OrbState } from '@/components/ui/Orb';
-import { Chip, IconButton, PrimaryButton } from '@/components/ui/Surface';
-import { Display, Mono, Sans } from '@/components/ui/Typography';
-import {
-  activityHints,
-  activityIcons,
-  dietHints,
-  dietIcons,
-  goalHints,
-  goalIcons,
-  type IconSpec,
-} from '@/constants/icons';
-import { colors, fonts, radii } from '@/constants/theme';
+import { Orb } from '@/components/ui/Orb';
+import { SheetProvider } from '@/components/ui/Sheet';
+import { Chip, Glass, IconButton, PrimaryButton } from '@/components/ui/Surface';
+import { Sans } from '@/components/ui/Typography';
+import { GoalCard } from '@/components/widgets/GoalCard';
+import { colors, fonts, type Tint } from '@/constants/theme';
 import { haptic } from '@/lib/haptics';
+import { uid } from '@/lib/nutrition';
 import {
-  AVOID_OPTIONS,
-  activityLabels,
-  computeTargets,
-  dietLabels,
-  formatKcal,
-  goalLabels,
-} from '@/lib/nutrition';
+  extractFacts,
+  FIRST_MESSAGE,
+  goalPlan,
+  mergeFacts,
+  missing,
+  onboardingReply,
+  profileFrom,
+} from '@/lib/onboarding';
 import { useNouri } from '@/lib/store';
-import type { Activity, Diet, Goal, OnboardingDraft } from '@/lib/types';
-import { useAnimatedNumber } from '@/lib/useAnimatedNumber';
+import type {
+  Capture,
+  FactKey,
+  Facts,
+  MemoryKind,
+  OnboardingDraft,
+  OnboardingMessage,
+} from '@/lib/types';
+import { useSend } from '@/lib/useSend';
 
-type Step = 'name' | 'goal' | 'diet' | 'avoid' | 'weight' | 'activity' | 'reveal';
-const ORDER: Step[] = ['name', 'goal', 'diet', 'avoid', 'weight', 'activity', 'reveal'];
+const CAPTURE_ICON: Record<Capture['key'], { icon: IconName; tint: Tint }> = {
+  name: { icon: 'user-rounded-bold-duotone', tint: 'gray' },
+  goal: { icon: 'target-bold-duotone', tint: 'rose' },
+  diet: { icon: 'leaf-bold-duotone', tint: 'mint' },
+  avoid: { icon: 'forbidden-circle-bold-duotone', tint: 'rose' },
+  weight: { icon: 'scale-bold-duotone', tint: 'blue' },
+  activity: { icon: 'walking-bold-duotone', tint: 'sky' },
+  like: { icon: 'heart-bold-duotone', tint: 'rose' },
+  dislike: { icon: 'dislike-bold-duotone', tint: 'gray' },
+};
+
+const PLACEHOLDER: Record<FactKey, string> = {
+  name: 'Il tuo nome, o raccontami di te',
+  goal: 'Scrivilo con parole tue',
+  food: 'Es. niente carne, senza lattosio',
+  body: 'Es. 70 kg, palestra due volte',
+};
 
 /**
- * Onboarding happens once. Once it's done the screen sends you to the chat
- * (even when opened directly); if it's interrupted, it resumes from the
- * last answer.
+ * Onboarding happens once, as a conversation: the user answers in their own
+ * words, Nouri asks only for what's missing and ends with the goal card.
+ * Once it's done the screen sends you to the chat (even when opened
+ * directly); if it's interrupted, the conversation resumes where it was.
  */
 export default function Onboarding() {
   const hydrated = useNouri((s) => s.hydrated);
@@ -56,209 +75,254 @@ export default function Onboarding() {
 
   if (!hydrated) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
   if (doneBefore.current) return <Redirect href="/" />;
-  return <OnboardingFlow draft={useNouri.getState().onboardingDraft} />;
+  const draft = useNouri.getState().onboardingDraft;
+  // drafts from the old step-by-step form have no conversation: start over
+  return (
+    <SheetProvider>
+      <OnboardingChat draft={Array.isArray(draft?.messages) ? draft : null} />
+    </SheetProvider>
+  );
 }
 
-function OnboardingFlow({ draft }: { draft: OnboardingDraft | null }) {
+function OnboardingChat({ draft }: { draft: OnboardingDraft | null }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const setProfile = useNouri((s) => s.setProfile);
+  const send = useSend();
   const setDraft = useNouri((s) => s.setOnboardingDraft);
 
-  const [step, setStep] = useState<Step>(draft?.step ?? 'name');
-  const [orb, setOrb] = useState<OrbState>('idle');
-  const [name, setName] = useState(draft?.name ?? '');
-  const [goal, setGoal] = useState<Goal>(draft?.goal ?? 'energy');
-  const [diet, setDiet] = useState<Diet>(draft?.diet ?? 'omnivore');
-  const [avoid, setAvoid] = useState<string[]>(draft?.avoid ?? []);
-  const [weight, setWeight] = useState(draft?.weight ?? '');
-  const [activity, setActivity] = useState<Activity>(draft?.activity ?? 'medium');
+  const [messages, setMessages] = useState<OnboardingMessage[]>(
+    () => draft?.messages ?? [{ id: 'hello', role: 'assistant', text: FIRST_MESSAGE }]
+  );
+  const [facts, setFacts] = useState<Facts>(draft?.facts ?? {});
+  const [asked, setAsked] = useState<FactKey | null>(draft?.asked ?? 'name');
+  const [chips, setChips] = useState<string[]>(draft?.chips ?? []);
+  // replies that stream in; the others (resumed from a draft) are shown as they are
+  const [fresh, setFresh] = useState<Set<string>>(() => new Set(draft ? [] : ['hello']));
+  const [settled, setSettled] = useState<Set<string>>(
+    () => new Set(draft ? draft.messages.map((m) => m.id) : [])
+  );
+  const [typing, setTyping] = useState(false);
+  const [text, setText] = useState('');
+  const done = useRef(false);
+  const scroll = useRef<ScrollView>(null);
 
-  const next = () => {
-    haptic.soft();
-    setOrb('thinking');
-    setTimeout(() => {
-      setStep((s) => ORDER[Math.min(ORDER.indexOf(s) + 1, ORDER.length - 1)]);
-      setOrb('idle');
-    }, 380);
-  };
-
-  const idx = ORDER.indexOf(step);
-  const first = name.trim().split(' ')[0] || 'amico';
-  const kg = Number(weight.replace(',', '.')) || null;
-  const targets = computeTargets(goal, kg, activity);
+  const settle = useCallback((id: string) => setSettled((s) => new Set(s).add(id)), []);
+  const finished = messages.some((m) => m.goalCard && settled.has(m.id));
 
   // every answer is kept, so closing the app mid-way doesn't start over
   useEffect(() => {
-    if (step !== 'reveal') setDraft({ step, name, goal, diet, avoid, weight, activity });
-  }, [step, name, goal, diet, avoid, weight, activity, setDraft]);
+    if (!done.current) setDraft({ messages, facts, asked, chips });
+  }, [messages, facts, asked, chips, setDraft]);
 
-  // the profile is saved as soon as the plan is revealed: onboarding is done from here
-  const saved = useRef(false);
-  useEffect(() => {
-    if (step !== 'reveal' || saved.current) return;
-    saved.current = true;
-    setProfile({
-      name: first,
-      goal,
-      diet,
-      avoid,
-      weight: kg,
-      activity,
-      targets,
-      createdAt: new Date().toISOString(),
-    });
-  }, [step, first, goal, diet, avoid, kg, activity, targets, setProfile]);
+  /** Profile, memory and the first conversation, as soon as Nouri has everything. */
+  const complete = (f: Facts) => {
+    if (done.current) return;
+    done.current = true;
+    const s = useNouri.getState();
+    const profile = profileFrom(f);
+    s.setProfile(profile);
+    const notes: { kind: MemoryKind; text: string }[] = [
+      ...(f.likes ?? []).map((t) => ({ kind: 'like' as const, text: t })),
+      ...(f.dislikes ?? []).map((t) => ({ kind: 'dislike' as const, text: t })),
+    ];
+    if (notes.length && s.memoryOn) s.remember(notes);
+    // the goal card opens the chat, so it's there from the first moment
+    s.newThread();
+    s.pushMessage(
+      {
+        role: 'assistant',
+        text: `Ecco la tua scheda obiettivo, ${profile.name}. La ritrovi qui, e per cambiarla basta dirmelo.`,
+        widgets: [{ type: 'goal' }],
+        suggestions: goalPlan(profile, { trains: profile.trains }).actions.map((a) => a.text),
+        engine: 'local',
+      },
+      false
+    );
+    const id = useNouri.getState().threadId;
+    if (id) s.renameThread(id, 'Il tuo obiettivo');
+  };
 
-  const finish = () => {
+  const answer = (raw: string) => {
+    const t = raw.trim();
+    if (!t || typing || finished) return;
+    haptic.soft();
+    setText('');
+    setChips([]);
+    setMessages((m) => [...m, { id: uid(), role: 'user', text: t }]);
+    setTyping(true);
+    setTimeout(() => {
+      const { facts: next, captures } = mergeFacts(facts, extractFacts(t, asked));
+      const reply = onboardingReply(next, captures, asked);
+      const id = uid();
+      const last = !missing(next);
+      setFacts(next);
+      setAsked(reply.asked);
+      setChips(reply.chips);
+      setFresh((f) => new Set(f).add(id));
+      setMessages((m) => [
+        ...m,
+        { id, role: 'assistant', text: reply.text, captures, goalCard: last || undefined },
+      ]);
+      setTyping(false);
+      if (captures.length) haptic.select();
+      if (last) complete(next);
+    }, 750);
+  };
+
+  const finish = (then?: string) => {
     haptic.success();
     router.replace('/');
+    if (then) setTimeout(() => send({ text: then }), 450);
   };
 
-  // [primary sentence, grey follow-up]
-  const QUESTIONS: Record<Exclude<Step, 'reveal'>, [string, string]> = {
-    name: ['Ciao, sono Nouri.', 'Come ti chiami?'],
-    goal: [`Piacere, ${first}.`, 'Cosa vuoi ottenere?'],
-    diet: ['Come mangi', 'di solito?'],
-    avoid: ['C’è qualcosa', 'che eviti?'],
-    weight: ['Quanto pesi, più o meno?', 'Serve solo per i conti.'],
-    activity: ['Quanto ti muovi', 'durante la settimana?'],
+  // follow the conversation, but stop at the start of the goal card's message
+  const cardTop = useRef<number | null>(null);
+  const viewport = useRef(0);
+  const toEnd = (_: number, h: number) => {
+    const end = h - viewport.current;
+    if (cardTop.current === null || end <= 0) scroll.current?.scrollToEnd({ animated: true });
+    else
+      scroll.current?.scrollTo({
+        y: Math.min(end, cardTop.current - insets.top - 16),
+        animated: true,
+      });
   };
+  const lastSettled = messages.length > 0 && settled.has(messages[messages.length - 1].id);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View
-          style={{
-            flex: 1,
-            paddingTop: insets.top + 16,
-            paddingBottom: insets.bottom + 16,
+        <ScrollView
+          ref={scroll}
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            flexGrow: 1,
+            paddingTop: insets.top + 28,
+            paddingBottom: 24,
             paddingHorizontal: 20,
-          }}>
-          <View style={styles.progress}>
-            {ORDER.slice(0, -1).map((s, i) => (
-              <View key={s} style={[styles.dash, i <= idx && { backgroundColor: colors.ink }]} />
-            ))}
-          </View>
+            gap: 22,
+          }}
+          keyboardShouldPersistTaps="handled"
+          onLayout={(e) => {
+            viewport.current = e.nativeEvent.layout.height;
+          }}
+          onContentSizeChange={toEnd}>
+          <Animated.View entering={FadeIn.duration(700)} style={styles.hero}>
+            <Orb size={96} state={typing ? 'thinking' : finished ? 'speaking' : 'idle'} />
+          </Animated.View>
 
-          {step === 'reveal' ? (
-            <Reveal name={first} targets={targets} onDone={finish} />
+          {messages.map((m) =>
+            m.role === 'user' ? (
+              <Animated.View key={m.id} entering={FadeIn.duration(200)} style={styles.userWrap}>
+                <View style={styles.userBubble}>
+                  <Sans size={16} style={{ lineHeight: 23 }}>
+                    {m.text}
+                  </Sans>
+                </View>
+              </Animated.View>
+            ) : (
+              <View
+                key={m.id}
+                style={{ gap: 12 }}
+                onLayout={
+                  m.goalCard
+                    ? (e) => {
+                        cardTop.current = e.nativeEvent.layout.y;
+                      }
+                    : undefined
+                }>
+                <RichText text={m.text} stream={fresh.has(m.id)} onDone={() => settle(m.id)} />
+                {settled.has(m.id) && m.captures?.length ? (
+                  <View style={styles.captures}>
+                    {m.captures.map((c, i) => (
+                      <Animated.View
+                        key={`${c.key}${c.label}`}
+                        entering={
+                          fresh.has(m.id)
+                            ? ZoomIn.delay(i * 110)
+                                .springify()
+                                .damping(14)
+                            : undefined
+                        }
+                        style={styles.capture}>
+                        <IconTile
+                          name={CAPTURE_ICON[c.key].icon}
+                          tint={CAPTURE_ICON[c.key].tint}
+                          size={24}
+                        />
+                        <Sans size={13} weight="medium">
+                          {c.label}
+                        </Sans>
+                        <Icon name="check-linear" size={14} color={colors.positive} />
+                      </Animated.View>
+                    ))}
+                  </View>
+                ) : null}
+                {settled.has(m.id) && m.goalCard ? (
+                  <Animated.View entering={FadeInDown.delay(250).duration(500)}>
+                    <GoalCard animate onAction={finish} />
+                  </Animated.View>
+                ) : null}
+              </View>
+            )
+          )}
+          {typing && <Thinking steps={['Ti ascolto', 'Prendo nota']} />}
+        </ScrollView>
+
+        <View style={[styles.bottom, { paddingBottom: insets.bottom + 12 }]}>
+          {finished ? (
+            <Animated.View entering={FadeInDown.duration(400)}>
+              <PrimaryButton label="Iniziamo" onPress={() => finish()} />
+            </Animated.View>
           ) : (
             <>
-              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                <Orb size={step === 'name' ? 132 : 104} state={orb} />
-                <Animated.View
-                  key={step}
-                  entering={FadeInDown.duration(420)}
-                  style={{ marginTop: 36, alignSelf: 'stretch' }}>
-                  <Display size={28} center>
-                    {QUESTIONS[step][0]}
-                  </Display>
-                  <Display size={28} muted center>
-                    {QUESTIONS[step][1]}
-                  </Display>
+              {chips.length > 0 && lastSettled && !typing ? (
+                <Animated.View entering={FadeIn.delay(150)}>
+                  <ScrollView
+                    horizontal
+                    keyboardShouldPersistTaps="handled"
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 8, paddingHorizontal: 4 }}>
+                    {chips.map((c) => (
+                      <Chip key={c} label={c} onPress={() => answer(c)} />
+                    ))}
+                  </ScrollView>
                 </Animated.View>
-              </View>
-
-              <Animated.View
-                key={`${step}-a`}
-                entering={FadeInDown.delay(180).duration(420)}
-                style={{ gap: 12 }}>
-                {step === 'name' && (
-                  <InputBar
-                    value={name}
-                    onChange={setName}
-                    placeholder="Il tuo nome"
-                    onSubmit={() => name.trim() && next()}
+              ) : null}
+              <Glass radius={26} style={styles.bar}>
+                <TextInput
+                  value={text}
+                  onChangeText={setText}
+                  placeholder={asked ? PLACEHOLDER[asked] : 'Scrivi a Nouri'}
+                  placeholderTextColor={colors.faint}
+                  autoFocus={Platform.OS === 'web'}
+                  multiline
+                  numberOfLines={Platform.OS === 'web' ? 1 : undefined}
+                  selectionColor={colors.ink}
+                  style={styles.input}
+                  onKeyPress={(e) => {
+                    const ev = e.nativeEvent as unknown as { key: string; shiftKey?: boolean };
+                    if (Platform.OS === 'web' && ev.key === 'Enter' && !ev.shiftKey) {
+                      (e as unknown as { preventDefault: () => void }).preventDefault();
+                      answer(text);
+                    }
+                  }}
+                />
+                <IconButton
+                  label="Invia"
+                  filled
+                  size={36}
+                  disabled={!text.trim() || typing}
+                  onPress={() => answer(text)}>
+                  <Icon
+                    name="arrow-up-linear"
+                    size={20}
+                    color={text.trim() ? colors.onAccent : colors.faint}
                   />
-                )}
-                {step === 'goal' && (
-                  <ChoiceList
-                    options={(Object.keys(goalLabels) as Goal[]).map((k) => ({
-                      key: k,
-                      label: goalLabels[k],
-                      hint: goalHints[k],
-                      ...goalIcons[k],
-                    }))}
-                    onPick={(v) => {
-                      setGoal(v);
-                      next();
-                    }}
-                  />
-                )}
-                {step === 'diet' && (
-                  <ChoiceList
-                    options={(Object.keys(dietLabels) as Diet[]).map((k) => ({
-                      key: k,
-                      label: dietLabels[k],
-                      hint: dietHints[k],
-                      ...dietIcons[k],
-                    }))}
-                    onPick={(v) => {
-                      setDiet(v);
-                      next();
-                    }}
-                  />
-                )}
-                {step === 'avoid' && (
-                  <>
-                    <View style={styles.wrap}>
-                      {AVOID_OPTIONS.map((a) => (
-                        <Chip
-                          key={a}
-                          label={a}
-                          active={avoid.includes(a)}
-                          onPress={() =>
-                            setAvoid((l) => (l.includes(a) ? l.filter((x) => x !== a) : [...l, a]))
-                          }
-                          style={{ height: 40 }}
-                        />
-                      ))}
-                    </View>
-                    <PrimaryButton
-                      label={avoid.length ? 'Continua' : 'Mangio di tutto'}
-                      onPress={next}
-                      style={{ marginTop: 8 }}
-                    />
-                  </>
-                )}
-                {step === 'weight' && (
-                  <>
-                    <InputBar
-                      value={weight}
-                      onChange={setWeight}
-                      placeholder="68"
-                      suffix="kg"
-                      numeric
-                      onSubmit={next}
-                    />
-                    <PrimaryButton
-                      label="Preferisco non dirlo"
-                      variant="outline"
-                      onPress={() => {
-                        setWeight('');
-                        next();
-                      }}
-                    />
-                  </>
-                )}
-                {step === 'activity' && (
-                  <ChoiceList
-                    options={(['low', 'medium', 'high'] as Activity[]).map((k) => ({
-                      key: k,
-                      label: activityLabels[k],
-                      hint: activityHints[k],
-                      ...activityIcons[k],
-                    }))}
-                    onPick={(v) => {
-                      setActivity(v as Activity);
-                      next();
-                    }}
-                  />
-                )}
-              </Animated.View>
+                </IconButton>
+              </Glass>
             </>
           )}
         </View>
@@ -267,221 +331,42 @@ function OnboardingFlow({ draft }: { draft: OnboardingDraft | null }) {
   );
 }
 
-function InputBar({
-  value,
-  onChange,
-  placeholder,
-  onSubmit,
-  suffix,
-  numeric,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-  onSubmit: () => void;
-  suffix?: string;
-  numeric?: boolean;
-}) {
-  return (
-    <View style={styles.inputBar}>
-      <TextInput
-        value={value}
-        onChangeText={onChange}
-        placeholder={placeholder}
-        placeholderTextColor={colors.faint}
-        autoFocus={Platform.OS === 'web'}
-        keyboardType={numeric ? 'decimal-pad' : 'default'}
-        returnKeyType="next"
-        onSubmitEditing={onSubmit}
-        selectionColor={colors.ink}
-        style={[styles.input, Platform.OS === 'web' && ({ outlineStyle: 'none' } as object)]}
-      />
-      {suffix ? (
-        <Sans size={16} color={colors.faint} style={{ marginRight: 10 }}>
-          {suffix}
-        </Sans>
-      ) : null}
-      <IconButton label="Continua" filled size={38} disabled={!value.trim()} onPress={onSubmit}>
-        <Icon
-          name="arrow-up-linear"
-          size={20}
-          color={value.trim() ? colors.onAccent : colors.faint}
-        />
-      </IconButton>
-    </View>
-  );
-}
-
-function ChoiceList<T extends string>({
-  options,
-  onPick,
-}: {
-  options: ({ key: T; label: string; hint: string } & IconSpec)[];
-  onPick: (v: T) => void;
-}) {
-  const [picked, setPicked] = useState<T | null>(null);
-  return (
-    <View style={styles.list}>
-      {options.map((o, i) => (
-        <Pressable
-          key={o.key}
-          onPress={() => {
-            haptic.select();
-            setPicked(o.key);
-            onPick(o.key);
-          }}
-          style={({ pressed }) => [
-            styles.option,
-            i > 0 && styles.optionDivider,
-            (pressed || picked === o.key) && { backgroundColor: colors.bgSubtle },
-          ]}>
-          <IconTile name={o.icon as IconName} tint={o.tint} size={38} />
-          <View style={{ flex: 1 }}>
-            <Sans size={16} weight="medium">
-              {o.label}
-            </Sans>
-            <Sans size={13} color={colors.faint}>
-              {o.hint}
-            </Sans>
-          </View>
-          {picked === o.key ? (
-            <Icon name="check-circle-bold" size={22} color={colors.ink} />
-          ) : (
-            <Icon name="alt-arrow-right-linear" size={16} color={colors.faint} />
-          )}
-        </Pressable>
-      ))}
-    </View>
-  );
-}
-
-function Reveal({
-  name,
-  targets,
-  onDone,
-}: {
-  name: string;
-  targets: ReturnType<typeof computeTargets>;
-  onDone: () => void;
-}) {
-  const kcal = useAnimatedNumber(targets.kcal, 1400, 250);
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    const t = setTimeout(() => setReady(true), 1100);
-    return () => clearTimeout(t);
-  }, []);
-  const macros = [
-    {
-      label: 'Proteine',
-      v: targets.protein,
-      c: colors.protein,
-      share: (targets.protein * 4) / targets.kcal,
-    },
-    {
-      label: 'Carboidrati',
-      v: targets.carbs,
-      c: colors.carbs,
-      share: (targets.carbs * 4) / targets.kcal,
-    },
-    { label: 'Grassi', v: targets.fat, c: colors.fat, share: (targets.fat * 9) / targets.kcal },
-  ];
-  return (
-    <View style={{ flex: 1, justifyContent: 'space-between' }}>
-      <View style={{ flex: 1, justifyContent: 'center' }}>
-        <Animated.View entering={FadeIn.duration(600)} style={{ alignItems: 'center' }}>
-          <Orb size={88} state="speaking" />
-        </Animated.View>
-        <Animated.View entering={FadeInDown.delay(150).duration(500)} style={{ marginTop: 32 }}>
-          <Display size={28} center>
-            Ecco il tuo piano, {name}.
-          </Display>
-          <Display size={28} muted center>
-            Lo aggiustiamo parlando.
-          </Display>
-        </Animated.View>
-        <Animated.View entering={FadeInDown.delay(300).duration(500)} style={styles.bigNumber}>
-          <Mono
-            size={60}
-            weight="medium"
-            color={colors.ink}
-            style={{ lineHeight: 66, letterSpacing: -2.5 }}>
-            {formatKcal(kcal)}
-          </Mono>
-          <Sans size={14} color={colors.faint}>
-            kcal al giorno · {(targets.water / 1000).toLocaleString('it-IT')} L d’acqua
-          </Sans>
-        </Animated.View>
-        <Animated.View entering={FadeInDown.delay(450).duration(500)} style={styles.macroCard}>
-          {macros.map((m, i) => (
-            <View key={m.label} style={{ flex: 1, gap: 8 }}>
-              <Sans size={12} color={colors.faint}>
-                {m.label}
-              </Sans>
-              <Mono size={18} weight="medium" color={colors.ink}>
-                {m.v} g
-              </Mono>
-              <MacroBar progress={m.share * 2} color={m.c} delay={700 + i * 120} />
-            </View>
-          ))}
-        </Animated.View>
-      </View>
-      {ready && (
-        <Animated.View entering={FadeIn.duration(300)}>
-          <PrimaryButton label="Inizia" onPress={onDone} />
-        </Animated.View>
-      )}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  progress: { flexDirection: 'row', gap: 4 },
-  dash: { flex: 1, height: 2, borderRadius: 1, backgroundColor: colors.ghost },
-  wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  inputBar: {
+  hero: { alignItems: 'center', paddingVertical: 8 },
+  userWrap: { alignItems: 'flex-end', marginLeft: 56 },
+  userBubble: {
+    backgroundColor: colors.bgMuted,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  captures: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  capture: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 56,
-    paddingLeft: 18,
-    paddingRight: 8,
-    borderRadius: radii.xl,
+    gap: 7,
+    height: 34,
+    paddingLeft: 5,
+    paddingRight: 11,
+    borderRadius: 17,
     borderWidth: 1,
-    borderColor: colors.borderStrong,
+    borderColor: colors.border,
     backgroundColor: colors.bg,
   },
+  bottom: { gap: 10, paddingHorizontal: 16, paddingTop: 8 },
+  bar: { flexDirection: 'row', alignItems: 'flex-end', gap: 4, padding: 6, paddingLeft: 10 },
   input: {
     flex: 1,
     position: 'relative',
     zIndex: 1,
-    height: 48,
+    minHeight: 36,
+    maxHeight: 120,
+    paddingTop: 8,
+    paddingBottom: 8,
+    paddingHorizontal: 8,
     color: colors.ink,
     fontFamily: fonts.sans,
-    fontSize: 17,
-  },
-  list: {
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-  },
-  option: {
-    minHeight: 64,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.bg,
-  },
-  optionDivider: { borderTopWidth: 1, borderColor: colors.border, marginLeft: 0 },
-  bigNumber: { alignItems: 'center', marginTop: 34, gap: 2 },
-  macroCard: {
-    flexDirection: 'row',
-    gap: 18,
-    marginTop: 28,
-    padding: 16,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
+    fontSize: 16,
+    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null),
   },
 });

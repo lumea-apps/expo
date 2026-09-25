@@ -19,15 +19,16 @@ import { RichText } from './RichText';
 
 export function MessageView({
   message,
-  afterPhoto,
+  photoUri,
   onSend,
 }: {
   message: ChatMessage;
-  afterPhoto?: boolean;
+  /** For a reply: the photo in the message it answers. */
+  photoUri?: string;
   onSend: (text: string) => void;
 }) {
   if (message.role === 'user') return <UserMessage message={message} onSend={onSend} />;
-  return <AssistantMessage message={message} afterPhoto={afterPhoto} onSend={onSend} />;
+  return <AssistantMessage message={message} photoUri={photoUri} onSend={onSend} />;
 }
 
 function useMessageMenu(message: ChatMessage, onSend: (text: string) => void) {
@@ -115,11 +116,11 @@ function ActionIcon({
 
 function AssistantMessage({
   message,
-  afterPhoto,
+  photoUri,
   onSend,
 }: {
   message: ChatMessage;
-  afterPhoto?: boolean;
+  photoUri?: string;
   onSend: (text: string) => void;
 }) {
   const fresh = useNouri((s) => Boolean(s.fresh[message.id]));
@@ -153,7 +154,8 @@ function AssistantMessage({
               widget={w}
               widgetKey={`${message.id}:${i}`}
               onSend={onSend}
-              fromPhoto={afterPhoto}
+              photoUri={photoUri}
+              animate={fresh}
             />
           </Animated.View>
         ))}

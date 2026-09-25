@@ -12,6 +12,9 @@ import { haptic } from '@/lib/haptics';
 import { formatKcal, formatTime, mealTotals } from '@/lib/nutrition';
 import { useNouri } from '@/lib/store';
 import type { FoodItem, MealDraft } from '@/lib/types';
+import { useAnimatedNumber } from '@/lib/useAnimatedNumber';
+
+import { MealBreakdown } from './MealBreakdown';
 
 const PORTIONS = [1, 1.5, 2, 0.5];
 
@@ -36,12 +39,17 @@ function scale(item: FoodItem, k: number): FoodItem {
 export function MealLogCard({
   meal,
   widgetKey,
-  photo,
+  photoUri,
+  animate = false,
 }: {
   meal: MealDraft;
   widgetKey: string;
-  photo?: boolean;
+  /** The photo the estimate comes from, if any. */
+  photoUri?: string;
+  /** Fresh reply: play the breakdown animation. */
+  animate?: boolean;
 }) {
+  const photo = Boolean(photoUri);
   const loggedId = useNouri((s) => s.logged[widgetKey]);
   const loggedMeal = useNouri((s) => s.meals.find((m) => m.id === loggedId));
   const logMeal = useNouri((s) => s.logMeal);
@@ -66,15 +74,16 @@ export function MealLogCard({
         />
       ),
     });
-  const macroKcal = tot.protein * 4 + tot.carbs * 4 + tot.fat * 9 || 1;
   const locked = Boolean(loggedId);
+  const [play] = useState(animate);
+  const kcal = useAnimatedNumber(tot.kcal, play ? 1300 : 1, play ? 900 : 0);
 
   return (
     <Card>
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Sans size={12} color={colors.faint}>
-            {meal.label} · {photo ? 'stima dalla foto' : 'stima'}
+            {meal.label} · {photo ? 'stima dalla foto' : 'stima dal tuo racconto'}
           </Sans>
           <Sans size={16} weight="semi" numberOfLines={2} style={{ marginTop: 2 }}>
             {meal.title}
@@ -82,23 +91,20 @@ export function MealLogCard({
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           <Mono size={22} weight="medium" color={colors.ink} style={{ letterSpacing: -0.5 }}>
-            {formatKcal(tot.kcal)}
+            {formatKcal(kcal)}
           </Mono>
           <Mono size={11}>kcal</Mono>
         </View>
       </View>
 
-      <View style={styles.macros}>
-        <View style={styles.split}>
-          <View style={{ flex: (tot.protein * 4) / macroKcal, backgroundColor: colors.protein }} />
-          <View style={{ flex: (tot.carbs * 4) / macroKcal, backgroundColor: colors.carbs }} />
-          <View style={{ flex: (tot.fat * 9) / macroKcal, backgroundColor: colors.fat }} />
-        </View>
-        <View style={styles.legend}>
-          <Legend color={colors.protein} label="Proteine" value={tot.protein} />
-          <Legend color={colors.carbs} label="Carboidrati" value={tot.carbs} />
-          <Legend color={colors.fat} label="Grassi" value={tot.fat} />
-        </View>
+      <View style={styles.breakdown}>
+        <MealBreakdown
+          items={items}
+          emoji={meal.emoji}
+          photoUri={photoUri}
+          totals={tot}
+          animate={play}
+        />
       </View>
 
       <View style={styles.items}>
@@ -200,20 +206,6 @@ export function MealLogCard({
   );
 }
 
-function Legend({ color, label, value }: { color: string; label: string; value: number }) {
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
-      <Sans size={12} color={colors.dim}>
-        {label}{' '}
-        <Mono size={12} color={colors.ink}>
-          {Math.round(value)}g
-        </Mono>
-      </Sans>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
@@ -222,9 +214,7 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 0,
   },
-  macros: { paddingHorizontal: 16, paddingTop: 14 },
-  split: { flexDirection: 'row', height: 4, borderRadius: 2, overflow: 'hidden', gap: 2 },
-  legend: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+  breakdown: { paddingHorizontal: 8, paddingTop: 14 },
   items: { marginTop: 12, borderTopWidth: 1, borderColor: colors.border, paddingVertical: 4 },
   item: {
     flexDirection: 'row',

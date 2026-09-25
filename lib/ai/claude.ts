@@ -94,6 +94,7 @@ Ogni risposta è un oggetto JSON con:
   • swap — uno scambio furbo: alimento di partenza → alternativa, con motivo.
   • meal_plan — un piano pasti quando l'utente lo chiede: 1 giorno ("start" today o tomorrow) oppure 7 giorni per la settimana. Se non dice la durata, usa quella predefinita indicata in <piani>. Ogni giorno ha 4 pasti in quest'ordine: Colazione, Pranzo, Spuntino, Cena, con kcal e macro della porzione e minuti di preparazione. Ogni giorno entro ±8% del target calorico e vicino al target di proteine; piatti italiani realistici e vari (nessun piatto più di 2 volte a settimana, mai due giorni di fila). "focus": balanced | protein | quick | light. Nel testo 1–2 frasi (media di kcal e proteine, cosa hai escluso): non elencare i piatti. L'app salva il piano come piano attivo.
   • food_facts — valori nutrizionali di un alimento o prodotto ("quante calorie ha…", "valori del parmigiano"): valori per 100 g (fibre, zuccheri e sale compresi, 0 se trascurabili) e una porzione tipica in grammi. "brand" vuoto se non è un prodotto di marca.
+  • goal — la scheda obiettivo dell'utente (obiettivo, tempi realistici, numeri del giorno, tre regole, cosa fare adesso), disegnata dall'app dal profilo: quando chiede del suo obiettivo, "a che punto sono", o dopo che l'ha cambiato.
   • workout_plan — la scheda di allenamento (modulo facoltativo). "mode": current per mostrare quella attiva (in <allenamento>), new per crearne una: scegli goal (strength | muscle | fat_loss | fitness), level 1–3, days 2–6, equipment (none = corpo libero | home = manubri/elastici | gym) e minutes (20 | 30 | 45 | 60) da ciò che dice l'utente e dalla scheda attuale. L'app costruisce la scheda dal suo catalogo di esercizi e la rende attiva: nel testo 1–2 frasi, senza elencare gli esercizi. "session": la lettera della seduta da mostrare ("A", "B"…) o "".
   • exercise — come si esegue un esercizio. "id" è l'id del catalogo qui sotto se l'esercizio c'è (l'app usa la sua spiegazione), altrimenti "" e compili tu muscoli, attrezzi, 3–5 passaggi, 1–3 consigli e 1–3 errori. "dose" es. "3 × 10–12" oppure "".
   • exercises — 3–6 esercizi del catalogo per un muscolo o un obiettivo ("esercizi per i glutei"): "title" breve e gli "ids" del catalogo.
@@ -232,6 +233,7 @@ const TURN_SCHEMA = obj({
             }),
           },
         }),
+        widgetOf('goal'),
         widgetOf('workout_plan', {
           mode: { type: 'string', enum: ['current', 'new'] },
           goal: { type: 'string', enum: ['strength', 'muscle', 'fat_loss', 'fitness'] },
@@ -324,7 +326,7 @@ function contextBlock(ctx: BrainContext): string {
   return `${memory}${plan}${trainingContext(ctx)}
 <oggi>
 Ora locale: ${new Date().toLocaleString('it-IT', { weekday: 'long', hour: '2-digit', minute: '2-digit' })}
-Utente: ${profile.name} · obiettivo ${profile.goal} · dieta ${profile.diet} · evita: ${avoid}${profile.weight ? ` · ${profile.weight} kg` : ''}
+Utente: ${profile.name} · obiettivo ${profile.goal}${profile.aimKg ? ` (${profile.goal === 'gain' ? '+' : '-'}${profile.aimKg} kg)` : ''} · dieta ${profile.diet} · evita: ${avoid}${profile.weight ? ` · ${profile.weight} kg` : ''}
 Target giornaliero: ${T.kcal} kcal, P${T.protein} g, C${T.carbs} g, G${T.fat} g, acqua ${T.water} ml
 Consumato oggi: ${today.kcal} kcal, P${today.protein} g, C${today.carbs} g, G${today.fat} g, acqua ${ctx.waterToday} ml
 Rimanente: ${T.kcal - today.kcal} kcal, P${T.protein - today.protein} g
@@ -683,6 +685,7 @@ function sanitize(raw: Partial<AssistantTurn>, ctx: BrainContext): AssistantTurn
             })),
           });
         break;
+      case 'goal':
       case 'insight':
       case 'swap':
       case 'macros':

@@ -36,10 +36,24 @@ export default function ChatScreen() {
   // fired by our own auto-scroll are ignored for a moment so they can't unstick it.
   const stick = useRef(true);
   const autoScrollAt = useRef(0);
+  // A reply is followed until its first line reaches the header, then the view
+  // stops there, so a tall card is read (and its animation seen) from the top.
+  const replyTop = useRef<number | null>(null);
+  const viewport = useRef(0);
+  const content = useRef(0);
+  const headerSpace = insets.top + 64;
   const toEnd = useCallback(() => {
     autoScrollAt.current = Date.now();
-    scroll.current?.scrollToEnd({ animated: true });
-  }, []);
+    const end = content.current - viewport.current;
+    if (replyTop.current === null || end <= 0) {
+      scroll.current?.scrollToEnd({ animated: true });
+      return;
+    }
+    scroll.current?.scrollTo({
+      y: Math.max(0, Math.min(end, replyTop.current - headerSpace)),
+      animated: true,
+    });
+  }, [headerSpace]);
 
   const sendInput = useCallback(
     (input: UserInput) => {
@@ -113,12 +127,16 @@ export default function ChatScreen() {
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
             scrollEventThrottle={32}
+            onLayout={(e) => {
+              viewport.current = e.nativeEvent.layout.height;
+            }}
             onScroll={(e) => {
               if (Date.now() - autoScrollAt.current < 700) return;
               const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
               stick.current = contentSize.height - contentOffset.y - layoutMeasurement.height < 160;
             }}
-            onContentSizeChange={() => {
+            onContentSizeChange={(_, h) => {
+              content.current = h;
               if (stick.current && messages.length) toEnd();
             }}>
             {messages.length === 0 && !thinking && (
@@ -129,11 +147,20 @@ export default function ChatScreen() {
                 {(i === 0 || dayKey(m.at) !== dayKey(messages[i - 1].at)) && (
                   <DayDivider at={m.at} />
                 )}
-                <MessageView
-                  message={m}
-                  afterPhoto={m.role === 'assistant' && Boolean(messages[i - 1]?.imageUri)}
-                  onSend={sendText}
-                />
+                <View
+                  onLayout={
+                    i === messages.length - 1
+                      ? (e) => {
+                          replyTop.current = m.role === 'assistant' ? e.nativeEvent.layout.y : null;
+                        }
+                      : undefined
+                  }>
+                  <MessageView
+                    message={m}
+                    photoUri={m.role === 'assistant' ? messages[i - 1]?.imageUri : undefined}
+                    onSend={sendText}
+                  />
+                </View>
               </Fragment>
             ))}
             {thinking && <Thinking photo={Boolean(lastUser?.imageUri)} />}

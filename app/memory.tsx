@@ -16,6 +16,7 @@ import { colors, fonts, radii, type Tint } from '@/constants/theme';
 import { GOAL_ICON } from '@/constants/trainingIcons';
 import { haptic } from '@/lib/haptics';
 import { focusLabels, planTitle } from '@/lib/mealplan';
+import { goalLabel } from '@/lib/onboarding';
 import {
   activityLabels,
   dayKey,
@@ -270,7 +271,7 @@ function MemoryContent() {
               icon={goalIcons[profile.goal].icon}
               tint={goalIcons[profile.goal].tint}
               label="Obiettivo"
-              value={goalLabels[profile.goal]}
+              value={profile.aimKg ? goalLabel(profile) : goalLabels[profile.goal]}
               chevron
               onPress={() => router.push('/profile')}
             />

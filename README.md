@@ -18,9 +18,10 @@ Chiara, tipografica e silenziosa, a metà tra ElevenLabs e ChatGPT: la conversaz
 
 ## Cosa fa
 
-- **Onboarding conversazionale**: sei domande, una alla volta, poi Nouri mostra il tuo "ritmo" (kcal, macro, acqua). Si fa una volta sola: le risposte vengono salvate man mano (se chiudi a metà riprendi da dove eri), il profilo è salvato appena vedi il piano e da lì in poi l'app apre sempre la chat. Le risposte restano in **Memoria › Il tuo profilo**.
+- **Onboarding come una chiacchierata**: niente moduli. Nouri si presenta e tu rispondi con parole tue, anche tutto insieme (*"Sono Luca, vorrei perdere 4 kg e non mangio carne"*). Sotto ogni risposta compaiono i "ho capito" (nome, obiettivo, alimentazione, peso, movimento, gusti), e Nouri chiede solo quello che manca, con risposte rapide da toccare se non hai voglia di scrivere. Alla fine arriva la **scheda obiettivo**: il traguardo con i tempi realistici (*"circa 10 settimane, entro inizio dicembre"*), le calorie e i macro del giorno, tre regole su misura e cosa fare adesso. Un tocco su un'azione apre la chat e la esegue. Si fa una volta sola: la conversazione è salvata man mano (se chiudi a metà riprendi da lì), e la scheda obiettivo resta come prima conversazione. Si richiama con *"il mio obiettivo"*. Le risposte restano in **Memoria › Il tuo profilo**.
 - **Chat con widget generativi**:
-  - `meal_log`: pasto scomposto in voci, con badge di confidenza. Tocchi una voce per cambiare la porzione, poi registri.
+  - `meal_log`: il piatto si scompone davanti a te. Il piatto (o la tua foto) al centro, gli ingredienti che escono ad arco con le loro kcal, e proteine, carboidrati e grassi che scorrono come particelle colorate nei tre totali mentre i numeri salgono. Vale sia per la foto sia per un pasto raccontato a parole. Sotto, le voci con il badge di confidenza: tocchi una voce per cambiare la porzione, poi registri.
+  - `goal`: la scheda obiettivo, sempre aggiornata sul profilo.
   - `macros`: anelli e barre della giornata, sempre aggiornati.
   - `ideas`: carosello di idee su misura per i macro rimanenti, la dieta e cosa eviti.
   - `recipe`: ricetta completa, registrabile con un tap.
@@ -119,6 +120,7 @@ components/widgets/  le card generative
 components/food/     scheda alimento, tabella nutrizionale, scanner del codice a barre
 lib/ai/              askNouri() → Claude o motore offline (scorciatoie sempre istantanee)
 lib/memory.ts        memoria: gusti, abitudini e scorciatoie
+lib/onboarding.ts    onboarding conversazionale: cosa ha detto l'utente, domande mancanti, scheda obiettivo
 lib/mealplan.ts      generatore dei piani pasti, riuso dei piani salvati
 lib/grocery.ts       lista della spesa: ingredienti sommati con le quantità, per reparto
 lib/foodfacts.ts     valori nutrizionali della tabella interna

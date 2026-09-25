@@ -113,6 +113,12 @@ function route(input: UserInput, ctx: BrainContext): Turn {
   if (planned) return planned;
   const training = trainingTurn(input.text, ctx, false);
   if (training) return training;
+  if (
+    /(il mio obiettivo|scheda obiettivo|a che punto sono|qual e il mio obiettivo|mostrami (il mio )?obiettivo|i miei (target|numeri))/.test(
+      t
+    )
+  )
+    return goalTurn(ctx);
 
   const memory = parseMemory(input.text);
   const patch = parsePlanChange(t);
@@ -179,6 +185,19 @@ function route(input: UserInput, ctx: BrainContext): Turn {
     };
   }
   return fallbackTurn(ctx);
+}
+
+function goalTurn(ctx: BrainContext): Turn {
+  const T = ctx.profile.targets;
+  return {
+    text: `Ecco la tua scheda obiettivo: **${formatKcal(T.kcal)} kcal** e **${T.protein} g di proteine** al giorno. Se qualcosa è cambiato, dimmelo e la aggiorno.`,
+    widgets: [{ type: 'goal' }],
+    suggestions: [
+      'Com’è andata la settimana?',
+      'Voglio più proteine',
+      'Idee per il prossimo pasto',
+    ],
+  };
 }
 
 // ——— helpers ———

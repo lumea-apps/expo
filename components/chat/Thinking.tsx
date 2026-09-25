@@ -28,8 +28,8 @@ const PHOTO_STEPS = [
 ];
 
 /** Small orb plus a softly pulsing status line, instead of a spinner. */
-export function Thinking({ photo }: { photo?: boolean }) {
-  const steps = photo ? PHOTO_STEPS : TEXT_STEPS;
+export function Thinking({ photo, steps: custom }: { photo?: boolean; steps?: string[] }) {
+  const steps = custom ?? (photo ? PHOTO_STEPS : TEXT_STEPS);
   const [i, setI] = useState(0);
   const pulse = useSharedValue(0);
 
